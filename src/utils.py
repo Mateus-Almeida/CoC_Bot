@@ -18,6 +18,7 @@ else:
 
 INSTANCE_ID = None
 ADB_ADDRESS, ADB_DEVICE, MINITOUCH_DEVICE = None, None, None
+U2_DEVICE = None
 CACHE = {}
 
 def parse_args(debug=None, id=None, gui=None, gui_port=None):
@@ -399,7 +400,7 @@ def to_home_base(ref_cache=False):
             time.sleep(2)
             return
 
-def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
+def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False, silent=False):
     import time, cv2
     
     start = time.time()
@@ -420,10 +421,21 @@ def get_home_builders(timeout=60, return_amount=True, raise_exception=True, use_
             return available
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("get_home_builders", e)
+            if configs.DEBUG and not silent: print("get_home_builders", e)
         time.sleep(0.1)
         if time.time() > start + timeout: break
     raise Exception("Failed to get home builders")
+
+def get_u2_device():
+    global U2_DEVICE
+    if U2_DEVICE is None:
+        import uiautomator2 as u2
+        try:
+            U2_DEVICE = u2.connect(ADB_DEVICE)
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            if configs.DEBUG: print("get_u2_device error:", e)
+    return U2_DEVICE
 
 def start_coc(timeout=60):
     import time
@@ -432,25 +444,36 @@ def start_coc(timeout=60):
     try:
         if not running(): return False
         to_system_home()
-        print("Starting CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
+        print("Iniciando Clash of Clans...")
+        
+        # Inicia o app limpando a instância anterior apenas uma vez
+        ADB_DEVICE.shell("am start -S -n com.supercell.clashofclans/com.supercell.titan.GameApp")
+        
+        print("Aguardando carregamento inicial da Supercell (6 segundos)...")
+        time.sleep(6)
+        
         i = 0
         start = time.time()
         while time.time() - start < timeout:
             if not running(): return False
-            ADB_DEVICE.shell(f"am start {'-S' if i==0 else ''} -W -n com.supercell.clashofclans/com.supercell.titan.GameApp")
+            
+            # Se após 25 segundos não iniciou, tenta forçar a inicialização sem matar o processo
+            if i > 0 and (i % 25 == 0):
+                ADB_DEVICE.shell("am start -n com.supercell.clashofclans/com.supercell.titan.GameApp")
+                
             Input_Handler.click_exit(4, 0.1)
             
             Frame_Handler.get_frame()
             
             try:
-                get_home_builders(0, return_amount=False, use_cached_frame=True)
+                get_home_builders(0, return_amount=False, use_cached_frame=True, silent=True)
                 CACHE["location"] = "home_base"
                 break
             except (KeyboardInterrupt, SystemExit): raise
             except: pass
             
             try:
-                get_builder_builders(0, return_amount=False, use_cached_frame=True)
+                get_builder_builders(0, return_amount=False, use_cached_frame=True, silent=True)
                 CACHE["location"] = "builder_base"
                 break
             except (KeyboardInterrupt, SystemExit): raise
@@ -460,47 +483,77 @@ def start_coc(timeout=60):
             if cont_x is not None and cont_y is not None:
                 Input_Handler.click(cont_x, cont_y)
             
-            update_coc(timeout=5, from_in_game=True)
+            # Verifica atualizações esporadicamente (cada 10 segundos) para não sobrecarregar
+            if i % 10 == 0:
+                update_coc(timeout=5, from_in_game=True)
             
+            time.sleep(1)
             i += 1
+            
         if time.time() - start > timeout:
             stop_coc()
             raise Exception("Failed to start CoC")
-        print("CoC started", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
+        print("Clash of Clans iniciado com sucesso.")
         return True
     except (KeyboardInterrupt, SystemExit): raise
-    except:
+    except Exception as e:
+        if configs.DEBUG: print("Erro em start_coc:", e)
         return False
 
 def stop_coc():
-    from datetime import datetime
-    print("Stopping CoC...", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
-    ADB_DEVICE.shell("am force-stop com.supercell.clashofclans")
-    to_system_home()
-    print("CoC stopped", datetime.now().strftime("%I:%M:%S %p %m-%d-%Y"))
+    try:
+        pid = ADB_DEVICE.shell("pidof com.supercell.clashofclans").strip()
+    except:
+        pid = ""
+    if pid:
+        print("Fechando Clash of Clans...")
+        ADB_DEVICE.shell("am force-stop com.supercell.clashofclans")
+        to_system_home()
+        print("Clash of Clans fechado.")
+
+def clean_emulator_memory():
+    import configs
+    if ADB_DEVICE is None:
+        if configs.DEBUG: print("Dispositivo ADB não conectado. Ignorando limpeza de memória.")
+        return
+    try:
+        print("Executando limpeza preventiva de memória no emulador...")
+        # Limpa o cache de páginas, dentries e inodes no kernel do Android
+        ADB_DEVICE.shell("su -c 'echo 3 > /proc/sys/vm/drop_caches'")
+        # Executa trim de caches do sistema
+        ADB_DEVICE.shell("pm trim-caches 4096M")
+        # Encerra processos em segundo plano inativos
+        ADB_DEVICE.shell("am kill-all")
+        print("Limpeza de memória do emulador concluída.")
+    except Exception as e:
+        if configs.DEBUG: print("Erro ao limpar memória do emulador via ADB:", e)
 
 def update_coc(timeout=10, from_in_game=False):
-    import uiautomator2 as u2
-    conn = u2.connect(ADB_DEVICE)
+    conn = get_u2_device()
+    if conn is None:
+        return
+        
     if not from_in_game:
         ADB_DEVICE.shell('am start -a android.intent.action.VIEW -d "market://details?id=com.supercell.clashofclans"')
     else:
-        if conn.exists(text="UPDATE"):
-            try:
+        try:
+            if conn.exists(text="UPDATE"):
                 conn(text="UPDATE").click(timeout=0)
-            except (KeyboardInterrupt, SystemExit): raise
-            except:
-                if not from_in_game: to_system_home()
+            else:
                 return
-        else:
-            if not from_in_game: to_system_home()
+        except (KeyboardInterrupt, SystemExit): raise
+        except Exception as e:
+            if configs.DEBUG: print("update_coc check error:", e)
             return
     
-    if conn.exists(text="Update"):
-        try:
+    try:
+        if conn.exists(text="Update"):
             conn(text="Update").click(timeout=timeout)
-        except (KeyboardInterrupt, SystemExit): raise
-        except: pass
+    except (KeyboardInterrupt, SystemExit): raise
+    except Exception as e:
+        if configs.DEBUG: print("update_coc update error:", e)
+        pass
+        
     if not from_in_game: to_system_home()
 
 def to_builder_base(ref_cache=False):
@@ -538,7 +591,7 @@ def to_builder_base(ref_cache=False):
             return
         Input_Handler.swipe(x1=0.5, y1=0.5, x2=0.25, y2=0.75, hold_end_time=100)
 
-def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False):
+def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, use_cached_frame=False, silent=False):
     import time, cv2
     
     start = time.time()
@@ -559,7 +612,7 @@ def get_builder_builders(timeout=60, return_amount=True, raise_exception=True, u
             return available
         except (KeyboardInterrupt, SystemExit): raise
         except Exception as e:
-            if configs.DEBUG: print("get_builder_builders", e)
+            if configs.DEBUG and not silent: print("get_builder_builders", e)
         time.sleep(0.1)
         if time.time() > start + timeout: break
     raise Exception("Failed to get builder builders")
@@ -571,7 +624,10 @@ def require_exit(n=5, delay=0.1):
             try: result = func(*args, **kwargs)
             except (KeyboardInterrupt, SystemExit): raise
             except: pass
-            Input_Handler.click_exit(n, delay)
+            try:
+                Input_Handler.click_exit(n, delay)
+            except:
+                pass
             return result
         return wrapper
     return decorator
@@ -780,7 +836,7 @@ class Task_Handler:
             raise Exception("No external exclusion source available")
         except (KeyboardInterrupt, SystemExit): raise
         except:
-            return not configs.ASSIGN_BUILDER_APPRENTICE
+            return not configs.ASSIGN_BUILDER_ASSISTANT
 
 class OCR_Handler:
     
@@ -829,6 +885,19 @@ class OCR_Handler:
             ],
         )
         return chat_completion.choices[0].message.content.replace('~', '').splitlines()
+
+def pre_init_ocr():
+    import threading
+    import numpy as np
+    def target():
+        try:
+            if configs.DEBUG: print("Pré-inicializando o EasyOCR em segundo plano...")
+            dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+            OCR_Handler.local_ocr(dummy_frame)
+            if configs.DEBUG: print("EasyOCR pré-inicializado com sucesso.")
+        except Exception as e:
+            if configs.DEBUG: print("Erro na pré-inicialização do EasyOCR:", e)
+    threading.Thread(target=target, daemon=True).start()
 
 class Asset_Manager:
     fonts = {}
@@ -889,6 +958,28 @@ Asset_Manager.load_upgrader_assets()
 Asset_Manager.load_attacker_assets()
 Asset_Manager.load_fonts()
 
+def clear_popups():
+    import time
+    if ADB_DEVICE is not None:
+        try:
+            print("Limpando possíveis pop-ups/janelas (tecla Voltar)...")
+            ADB_DEVICE.shell("input keyevent 4")
+            time.sleep(0.5)
+            # Clica em área neutra superior para fechar o diálogo de confirmação de saída do jogo caso estivesse limpo
+            Input_Handler.click(0.5, 0.1)
+            time.sleep(0.5)
+            
+            # Verifica se há botão "okay" residual na tela (em caso de pop-ups persistentes)
+            if hasattr(Asset_Manager, 'attacker_assets') and "okay" in Asset_Manager.attacker_assets:
+                ok_x, ok_y = Frame_Handler.locate(Asset_Manager.attacker_assets["okay"], thresh=0.80)
+                if ok_x is not None and ok_y is not None:
+                    print("Botão 'Okay' residual detectado durante limpeza. Clicando...")
+                    Input_Handler.click(ok_x, ok_y)
+                    time.sleep(0.5)
+        except Exception as e:
+            if configs.DEBUG: print("Erro ao limpar pop-ups:", e)
+
+
 class Input_Handler:
     @classmethod
     def down(cls, x, y, pointer=0):
@@ -913,24 +1004,41 @@ class Input_Handler:
     @classmethod
     def click(cls, x, y, n=1, delay=0, pointer=0):
         import time
+        import random
         from pyminitouch import CommandBuilder
+        
+        # Adiciona delay randômico de simulação humana (entre 30ms e 150ms) antes do clique
+        time.sleep(random.uniform(0.03, 0.15))
+        
         if x < 0: x = 1 + x
         if y < 0: y = 1 + y
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
-        x = int(x * MAX_X)
-        y = int(y * MAX_Y)
+        
+        # Converte para pixels absolutos
+        pixel_x = int(x * MAX_X)
+        pixel_y = int(y * MAX_Y)
+        
+        # Adiciona ruído espacial simulando toque humano (variação de até 6 pixels)
+        # desde que não ultrapasse os limites da tela do dispositivo
+        pixel_x = max(0, min(MAX_X - 1, pixel_x + random.randint(-6, 6)))
+        pixel_y = max(0, min(MAX_Y - 1, pixel_y + random.randint(-6, 6)))
+        
         builder = CommandBuilder()
         for _ in range(n):
-            builder.down(pointer, x, y, 100)
+            builder.down(pointer, pixel_x, pixel_y, 100)
             builder.commit()
             builder.up(pointer)
             builder.publish(MINITOUCH_DEVICE.connection)
-            time.sleep(delay)
+            if delay > 0:
+                # Varia ligeiramente o tempo de espera entre cliques em caso de múltiplos cliques
+                time.sleep(delay * random.uniform(0.9, 1.1))
 
     @classmethod
     def click_exit(cls, n=1, delay=0):
-        cls.click(0.99, 0.99, n, delay=delay)
+        # Para clicar no botão de fechar (canto superior direito), aplicamos uma margem de variação menor
+        import random
+        cls.click(0.985 + random.uniform(-0.005, 0.005), 0.985 + random.uniform(-0.005, 0.005), n, delay=delay)
 
     @classmethod
     def multi_click(cls, x1, y1, x2, y2, duration=0):
@@ -940,35 +1048,74 @@ class Input_Handler:
 
     @classmethod
     def swipe(cls, x1, y1, x2, y2, duration=100, hold_end_time=0, inter_points=0, pointer=0):
-        import time, numpy as np
+        import time
+        import random
+        import numpy as np
         from pyminitouch import CommandBuilder
+        
+        # Introduz um atraso sutil antes de começar a arrastar
+        time.sleep(random.uniform(0.02, 0.08))
         
         if x1 < 0: x1 = 1 + x1
         if y1 < 0: y1 = 1 + y1
         if x2 < 0: x2 = 1 + x2
         if y2 < 0: y2 = 1 + y2
         
-        builder = CommandBuilder()
-        
         MAX_X = int(MINITOUCH_DEVICE.connection.max_x)
         MAX_Y = int(MINITOUCH_DEVICE.connection.max_y)
         
-        x1 = int(x1 * MAX_X)
-        y1 = int(y1 * MAX_Y)
-        x2 = int(x2 * MAX_X)
-        y2 = int(y2 * MAX_Y)
+        # Converte para pixels absolutos e adiciona ruído nas posições inicial e final (simulando toque humano imperfeito)
+        x1_pixel = max(0, min(MAX_X - 1, int(x1 * MAX_X) + random.randint(-8, 8)))
+        y1_pixel = max(0, min(MAX_Y - 1, int(y1 * MAX_Y) + random.randint(-8, 8)))
+        x2_pixel = max(0, min(MAX_X - 1, int(x2 * MAX_X) + random.randint(-8, 8)))
+        y2_pixel = max(0, min(MAX_Y - 1, int(y2 * MAX_Y) + random.randint(-8, 8)))
         
-        x_points = np.linspace(x1, x2, inter_points + 2, dtype=int)
-        y_points = np.linspace(y1, y2, inter_points + 2, dtype=int)
-        dt = duration / (inter_points + 1)
+        # Varia levemente a duração total do movimento
+        actual_duration = duration * random.uniform(0.92, 1.12)
         
-        builder.down(pointer, x1, y1, pressure=100)
+        # Aumentamos o número mínimo de pontos intermediários para suavizar o trajeto
+        # Se for 0, forçamos pelo menos 3 pontos para desenhar uma curva/linha mais real
+        if inter_points == 0:
+            inter_points = random.randint(3, 7)
+            
+        x_points = np.linspace(x1_pixel, x2_pixel, inter_points + 2, dtype=int)
+        y_points = np.linspace(y1_pixel, y2_pixel, inter_points + 2, dtype=int)
+        
+        # Adiciona um pequeno "desvio" curvilíneo no trajeto do arrasto para não ser perfeitamente reto
+        # Humanos raramente fazem linhas 100% retas ao deslizar o dedo
+        deviation_scale = random.uniform(-5.0, 5.0)
+        t = np.linspace(0, np.pi, inter_points + 2)
+        deviation = (np.sin(t) * deviation_scale).astype(int)
+        
+        # Aplica o desvio no eixo perpendicular predominante
+        if abs(x2_pixel - x1_pixel) < abs(y2_pixel - y1_pixel):
+            x_points += deviation
+        else:
+            y_points += deviation
+            
+        dt = actual_duration / (inter_points + 1)
+        
+        builder = CommandBuilder()
+        builder.down(pointer, x1_pixel, y1_pixel, pressure=100)
         builder.publish(MINITOUCH_DEVICE.connection)
-        for x, y in zip(x_points, y_points):
-            builder.move(pointer, x, y, pressure=100)
+        
+        for x, y in zip(x_points[1:-1], y_points[1:-1]):
+            # Garante que os pontos desviados ainda fiquem dentro da tela
+            x_safe = max(0, min(MAX_X - 1, x))
+            y_safe = max(0, min(MAX_Y - 1, y))
+            builder.move(pointer, x_safe, y_safe, pressure=100)
             builder.publish(MINITOUCH_DEVICE.connection)
-            if dt > 0: time.sleep(dt / 1000)
-        if hold_end_time > 0: time.sleep(hold_end_time / 1000)
+            # Adiciona flutuação de tempo no movimento entre pontos (micro-gagueira humana)
+            if dt > 0: 
+                time.sleep((dt * random.uniform(0.85, 1.15)) / 1000)
+                
+        # Move para o ponto final
+        builder.move(pointer, x2_pixel, y2_pixel, pressure=100)
+        builder.publish(MINITOUCH_DEVICE.connection)
+        
+        if hold_end_time > 0: 
+            time.sleep((hold_end_time * random.uniform(0.9, 1.1)) / 1000)
+            
         builder.up(pointer)
         builder.publish(MINITOUCH_DEVICE.connection)
 
@@ -1044,14 +1191,22 @@ class Frame_Handler:
     
     @classmethod
     def get_frame(cls, grayscale=True, high_contrast=False, thresh=200, use_cached=False):
-        import cv2, numpy as np
+        import cv2, numpy as np, time
         if use_cached and cls.cached_frame is not None:
             frame = cls.cached_frame.copy()
         else:
-            try: frame = ADB_DEVICE.framebuffer() # faster than screenshot but potentially unstable
-            except (KeyboardInterrupt, SystemExit): raise
-            except: frame = ADB_DEVICE.screenshot()
-            frame = np.array(frame)[..., :3]
+            for attempt in range(3):
+                try:
+                    frame = ADB_DEVICE.screenshot()
+                    frame = np.array(frame)[..., :3]
+                    break
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except:
+                    if attempt < 2:
+                        time.sleep(0.5 * (attempt + 1))
+            else:
+                raise Exception("Failed to capture frame after 3 attempts")
             frame = cv2.resize(frame, WINDOW_DIMS, interpolation=cv2.INTER_NEAREST)
             cls.cached_frame = frame.copy()
         if configs.DEBUG: cls.save_frame(frame, "debug/frame.png")
@@ -1093,7 +1248,7 @@ class Frame_Handler:
 
         res = cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(res)
-        if configs.DEBUG: print("locate confidence:", max_val)
+        # Removido print genérico de 'locate confidence' para evitar poluição no console
         
         if return_all:
             ys, xs = np.where(res >= thresh)

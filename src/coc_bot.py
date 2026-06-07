@@ -3,9 +3,16 @@ from utils import *
 from configs import *
 from upgrader import Upgrader
 from attacker import Attacker
+import random
 
 class CoC_Bot:
     def __init__(self):
+        self.cycle_count = 0
+        self.total_attacks = 0
+        self.successful_attacks = 0
+        self.failed_attacks = 0
+        self.quick_retry = False
+        pre_init_ocr()
         self.start_bluestacks()
         self.connect_adb()
         self.upgrader = Upgrader()
@@ -42,6 +49,10 @@ class CoC_Bot:
     def start_bluestacks(self):
         import sys, subprocess, time
         
+        if self.check_bluestacks():
+            if configs.DEBUG: print("BlueStacks is already running.")
+            return
+        
         if sys.platform == "darwin":
             subprocess.Popen([
                 "osascript", "-e",
@@ -65,8 +76,10 @@ class CoC_Bot:
     def check_bluestacks(self):
         import psutil
         for proc in psutil.process_iter(['name']):
-            if proc.info['name'] and 'bluestacks' in proc.info['name'].lower():
-                return True
+            if proc.info['name']:
+                name = proc.info['name'].lower()
+                if 'bluestacks' in name or 'hd-player' in name:
+                    return True
         return False
 
     def connect_adb(self):
@@ -82,19 +95,47 @@ class CoC_Bot:
             time.sleep(0.5)
         raise Exception("Failed to connect to ADB.")
     
+    def restart_bluestacks_flow(self):
+        import subprocess, time, sys
+        
+        print("\n=== Reiniciando o BlueStacks preventivamente para liberar memória RAM ===")
+        self.update_status("restarting")
+        
+        try:
+            stop_coc()
+        except:
+            pass
+            
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/IM", "HD-Player.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif sys.platform == "darwin":
+            subprocess.run(["osascript", "-e", 'quit application "BlueStacks"'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+        print("Aguardando 5 segundos para liberação dos recursos no sistema operacional...")
+        time.sleep(5)
+        
+        self.start_bluestacks()
+        self.connect_adb()
+        print("=== BlueStacks reiniciado e ADB reconectado com sucesso ===\n")
+    
     # ============================================================
     # ⏱️ Task Execution
     # ============================================================
     
     def run(self):
         import time
+        import gc
         
         while True:
             try:
+                gc.collect()
+                
                 if not running():
                     time.sleep(1)
                     continue
                 
+                print("--- Iniciando um novo ciclo de verificação ---")
+                cycle_success = True
                 if start_coc():
                     self.update_status("now")
                     
@@ -116,7 +157,13 @@ class CoC_Bot:
                     if not skip_home_base_upgrades:
                         self.upgrader.run_home_base(exclude_home_base, exclude_home_lab)
                     if not exclude_home_attacks:
-                        self.attacker.run_home_base(restart=not skip_home_base_upgrades or not skip_builder_base_upgrades)
+                        success = self.attacker.run_home_base(restart=not skip_home_base_upgrades or not skip_builder_base_upgrades)
+                        if success:
+                            self.successful_attacks += 1
+                        else:
+                            self.failed_attacks += 1
+                            cycle_success = False
+                        self.total_attacks += 1
                     
                     # Check builder base
                     if not skip_builder_base_upgrades or not exclude_builder_attacks:
@@ -126,17 +173,58 @@ class CoC_Bot:
                         self.upgrader.collect_builder_attack_elixir()
                         self.upgrader.run_builder_base(exclude_builder_base, exclude_builder_lab)
                     if not exclude_builder_attacks:
-                        self.attacker.run_builder_base()
+                        success = self.attacker.run_builder_base()
+                        if success:
+                            self.successful_attacks += 1
+                        else:
+                            self.failed_attacks += 1
+                            cycle_success = False
+                        self.total_attacks += 1
                     
-                    to_home_base()
                     stop_coc()
+                    if CLEAN_EMULATOR_ON_CYCLE:
+                        clean_emulator_memory()
                     self.update_status(time.time())
+                    print(f"Resumo acumulado: {self.total_attacks} ataques | {self.successful_attacks} sucessos | {self.failed_attacks} falhas")
+                    
+                    if not cycle_success:
+                        if not self.quick_retry:
+                            self.quick_retry = True
+                            actual_wait = 10
+                            print(f"Falha de ataque detectada. Agendando retry rápido em {actual_wait} segundos...")
+                        else:
+                            self.quick_retry = False
+                            actual_wait = int(20 * random.uniform(0.9, 1.1))
+                            print(f"Segunda falha detectada. Agendando nova tentativa rápida em {actual_wait} segundos...")
+                    else:
+                        self.quick_retry = False
+                        actual_wait = (60 * CHECK_INTERVAL) * random.uniform(0.85, 1.15)
+                        print(f"Ciclo concluído com sucesso. Próxima execução em aproximadamente {CHECK_INTERVAL} minutos.")
+                        
+                    self.cycle_count += 1
                 
-                time.sleep(60 * CHECK_INTERVAL)
+                if RESTART_EMULATOR_CYCLE_INTERVAL > 0 and self.cycle_count >= RESTART_EMULATOR_CYCLE_INTERVAL:
+                    self.restart_bluestacks_flow()
+                    self.cycle_count = 0
+                
+                time.sleep(actual_wait)
             
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-                stop_coc()
+                try:
+                    stop_coc()
+                except:
+                    pass
                 self.update_status("error")
+                # Em caso de erro, espera um tempo variável antes de tentar reiniciar
+                time.sleep(random.uniform(15, 45))
+                
+                # Tenta restabelecer a conexão com o emulador e ADB
+                try:
+                    self.start_bluestacks()
+                    self.connect_adb()
+                except (KeyboardInterrupt, SystemExit): raise
+                except Exception as reconnect_error:
+                    if configs.DEBUG: print("Erro ao tentar recuperar emulador/ADB:", reconnect_error)

@@ -33,39 +33,154 @@ class Attacker:
         return click_with_timeout(
             lambda: Frame_Handler.locate(self.assets["return_home"], thresh=0.9),
             timeout=timeout
-        )
-
-    def start_normal_attack(self, timeout=60):
+        )    def start_normal_attack(self, timeout=120):
         import time
+        print("Iniciando fluxo de ataque na Vila Principal...")
         
-        # Click attack
-        Input_Handler.click(0.07, 0.9)
-        
-        # Find a match
-        def locate_find_a_match():
-            xys = Frame_Handler.locate(self.assets["find_a_match"], thresh=0.9, return_all=True)
-            if len(xys) == 0: return None, None
-            xys = sorted(xys, key=lambda xy: xy[0])
-            x, y = xys[0]
-            if x > 0.2: return None, None
-            return x, y
-        if not click_with_timeout(
-            locate_find_a_match,
-            timeout=5
-        ): return False
-        
-        # Confirm attack
-        if not click_with_timeout(
-            lambda: Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.9),
-            timeout=5
-        ): return False
-        
-        # Wait until "end battle" button is found
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            x, y = Frame_Handler.locate(self.assets["end_battle"], thresh=0.9)
-            if x is not None and y is not None: return True
-            time.sleep(0.1)
+        # Limpeza preventiva inicial para fechar possíveis pop-ups tardios pós-carregamento
+        time.sleep(1.5)
+        clear_popups()
+        time.sleep(1.0)
+
+        def open_attack_and_start_matchmaking():
+            attack_opened = False
+            find_a_match_xy = (None, None)
+            
+            for attempt in range(3):
+                print(f"Tentando abrir o menu de ataque (tentativa {attempt + 1}/3)...")
+                Input_Handler.click(0.07, 0.9)
+                time.sleep(1.0) # Aguarda a animação do menu lateral deslizar
+                
+                # Aguarda até 6 segundos para ver se o botão de 'Procurar Oponente' surge na tela
+                start_check = time.time()
+                while time.time() - start_check < 6:
+                    xys = Frame_Handler.locate(self.assets["find_a_match"], thresh=0.82, return_all=True)
+                    if len(xys) > 0:
+                        xys = sorted(xys, key=lambda xy: xy[0])
+                        x, y = xys[0]
+                        if x <= 0.25:  # O painel multiplayer fica na parte esquerda
+                            find_a_match_xy = (x, y)
+                            attack_opened = True
+                            break
+                    time.sleep(0.3)
+                    
+                if attack_opened:
+                    break
+                    
+                print("Menu de ataque não respondeu ou foi bloqueado por pop-ups. Executando limpeza...")
+                clear_popups()
+                time.sleep(1)
+                
+            if not attack_opened or find_a_match_xy[0] is None:
+                print("Botão 'Procurar Oponente' não encontrado.")
+                return False, None
+                
+            print("Botão 'Procurar Oponente' localizado com sucesso! Clicando...")
+            Input_Handler.click(find_a_match_xy[0], find_a_match_xy[1])
+            
+            # Confirm attack
+            print("Buscando confirmação de ataque (botão amarelo de ouro)...")
+            if not click_with_timeout(
+                lambda: Frame_Handler.locate(self.assets["confirm_attack"], thresh=0.85),
+                timeout=6
+            ): 
+                print("Não foi possível confirmar o início da busca (confirm_attack não localizado).")
+                return False, None
+                
+            return True, find_a_match_xy
+
+        # Inicializa o matchmaking pela primeira vez
+        success, find_a_match_xy = open_attack_and_start_matchmaking()
+        if not success:
+            return False
+
+        # ----------------------------------------------------------------
+        # Loop de matchmaking otimizado:
+        # - Captura nova de tela a cada 1.5s (reduz carga ADB em ~67%)
+        # - Cancela e retenta automaticamente após CLOUD_CANCEL_AFTER segundos
+        # - Máximo de MAX_CANCEL_RETRIES cancelamentos no mesmo ciclo
+        # ----------------------------------------------------------------
+        CLOUD_CANCEL_AFTER = getattr(configs, 'CLOUD_CANCEL_AFTER', 25)   # segundos antes de cancelar e retentar
+        MAX_CANCEL_RETRIES = getattr(configs, 'MAX_CANCEL_RETRIES', 2)    # máximo de cancelamentos por ciclo
+        SCREENSHOT_INTERVAL = 1.5 # segundos entre capturas ADB
+
+        for cancel_attempt in range(MAX_CANCEL_RETRIES + 1):
+            if cancel_attempt == 0:
+                print("Carregando o campo de batalha nas nuvens...")
+            else:
+                print(f"Reiniciando busca por oponente (tentativa {cancel_attempt + 1}/{MAX_CANCEL_RETRIES + 1})...")
+                # Garante que a tela esteja limpa e reabre o menu de ataque a partir da Vila Principal
+                clear_popups()
+                time.sleep(1.0)
+                success, find_a_match_xy = open_attack_and_start_matchmaking()
+                if not success:
+                    print("Não foi possível reconfirmar o ataque após cancelamento.")
+                    break
+
+            search_start = time.time()
+            last_screenshot = 0.0
+            frame = None
+
+            while time.time() - search_start < CLOUD_CANCEL_AFTER:
+                now = time.time()
+                elapsed = int(now - search_start)
+
+                # Captura nova tela apenas a cada SCREENSHOT_INTERVAL segundos
+                if now - last_screenshot >= SCREENSHOT_INTERVAL:
+                    frame = Frame_Handler.get_frame(grayscale=True)
+                    last_screenshot = now
+                elif frame is None:
+                    time.sleep(SCREENSHOT_INTERVAL)
+                    continue
+
+                # Verifica botão End Battle (batalha carregada)
+                x, y = Frame_Handler.locate(self.assets["end_battle"], frame=frame, thresh=0.75)
+                if x is not None and y is not None:
+                    print(f"Vila oponente carregada com sucesso! Batalha iniciada ({elapsed}s nas nuvens).")
+                    return True
+
+                # Verifica Surrender (já dentro da batalha — end_battle não capturado)
+                sx, sy = Frame_Handler.locate(self.assets["surrender"], frame=frame, thresh=0.75)
+                if sx is not None and sy is not None:
+                    print(f"Batalha iniciada detectada via Surrender ({elapsed}s nas nuvens).")
+                    return True
+
+                # Verifica Return Home (Unable to attack village)
+                rx, ry = Frame_Handler.locate(self.assets["return_home"], frame=frame, thresh=0.72)
+                if rx is not None and ry is not None:
+                    print("⚠️ Erro de conexão detectado: 'Unable to attack Village'. Retornando...")
+                    Input_Handler.click(rx, ry)
+                    time.sleep(1.5)
+                    return False
+
+                time.sleep(0.1)
+
+            # Timeout parcial: tenta cancelar a busca e retentar
+            if cancel_attempt < MAX_CANCEL_RETRIES:
+                elapsed_total = int(time.time() - search_start)
+                print(f"⏱️ Busca nas nuvens sem resposta após {elapsed_total}s. Cancelando e retentando...")
+                
+                # Clicar no botão de Cancelar/End Battle na tela de busca
+                cx, cy = Frame_Handler.locate(self.assets["end_battle"], thresh=0.70)
+                if cx is not None and cy is not None:
+                    Input_Handler.click(cx, cy)
+                    time.sleep(0.5)
+                    # Confirma o cancelamento caso haja diálogo
+                    ok_x, ok_y = Frame_Handler.locate(self.assets["okay"], thresh=0.80)
+                    if ok_x is not None:
+                        Input_Handler.click(ok_x, ok_y)
+                    time.sleep(1.5)
+                else:
+                    # Se não achar o botão cancelar, tenta tecla voltar via ADB
+                    print("Botão cancelar não encontrado na tela. Enviando tecla Voltar...")
+                    if utils.ADB_DEVICE is not None:
+                        utils.ADB_DEVICE.shell("input keyevent 4")
+                    else:
+                        print("⚠️ Dispositivo ADB não conectado para enviar comando de voltar.")
+                    time.sleep(2.0)
+            else:
+                print(f"❌ Limite de {MAX_CANCEL_RETRIES} retentativas atingido. Desistindo da busca.")
+
         return False
     
     def start_builder_attack(self, timeout=60):
@@ -199,7 +314,7 @@ class Attacker:
         return output
     
     def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None):
-        import time, numpy as np
+        import time, numpy as np, random
         
         def card_gray(card_center):
             section = Frame_Handler.get_frame_section(card_center-0.01, 0.89, card_center+0.01, 0.91, grayscale=False)
@@ -209,39 +324,72 @@ class Attacker:
         if card_types is None: card_types = [None] * len(card_centers)
         if card_counts is None: card_counts = [0] * len(card_centers)
         
-        # Start holding deploy position w/ secondary touch pointer
-        Input_Handler.down(0.5, 0.8, pointer=1)
+        active_count = sum(available_slots)
+        if active_count > 0:
+            print(f"Lançando {active_count} grupo(s) de tropas detectadas no campo...")
+        
+        # Start holding deploy position w/ secondary touch pointer (adiciona um leve desvio no hold)
+        hold_x = 0.5 + random.uniform(-0.05, 0.05)
+        hold_y = 0.8 + random.uniform(-0.05, 0.05)
+        Input_Handler.down(hold_x, hold_y, pointer=1)
+        time.sleep(random.uniform(0.1, 0.25))
         
         for i in range(len(card_centers)):
             if available_slots[i]:
-                # Select slot
-                Input_Handler.click(card_centers[i], 0.9)
+                # Adiciona delay variável antes de interagir com o slot
+                time.sleep(random.uniform(0.12, 0.32))
+                
+                # Select slot (adiciona leve ruído no clique do card do menu inferior)
+                card_click_x = card_centers[i] + random.uniform(-0.008, 0.008)
+                card_click_y = 0.9 + random.uniform(-0.01, 0.01)
+                Input_Handler.click(card_click_x, card_click_y)
+                time.sleep(random.uniform(0.1, 0.25))
                 
                 # Deploy selected slot
+                # Gera uma coordenada de deploy ligeiramente diferente para cada deploy de slot
+                deploy_x = 0.5 + random.uniform(-0.06, 0.06)
+                deploy_y = 0.8 + random.uniform(-0.06, 0.06)
+                
                 if card_types[i] in ["hero", "clan"]:
-                    Input_Handler.click(0.5, 0.8)
+                    Input_Handler.click(deploy_x, deploy_y)
                 elif card_types[i] == "troop":
-                    Input_Handler.down(0.5, 0.8, pointer=0)
-                    end_time = time.monotonic() + TROOP_DEPLOY_TIME
-                    while time.monotonic() < end_time and not card_gray(card_centers[i]): time.sleep(0.01)
+                    Input_Handler.down(deploy_x, deploy_y, pointer=0)
+                    # Flutuação aleatória de ±15% na duração do deploy
+                    deploy_time = configs.TROOP_DEPLOY_TIME * random.uniform(0.85, 1.15)
+                    end_time = time.monotonic() + deploy_time
+                    while time.monotonic() < end_time and not card_gray(card_centers[i]): 
+                        time.sleep(0.01)
                     Input_Handler.up(pointer=0)
                 elif card_types[i] == "spell":
                     n = card_counts[i]
+                    # Dispersa as spells em uma área retangular com leve randomização extra
                     rxs = np.random.uniform(0.35, 0.65, n)
                     rys = np.random.uniform(0.45, 0.55, n)
                     for coord in zip(rxs, rys):
-                        Input_Handler.click(*coord)
+                        Input_Handler.click(coord[0] + random.uniform(-0.02, 0.02), coord[1] + random.uniform(-0.02, 0.02))
+                        time.sleep(random.uniform(0.1, 0.25))
                 else:
-                    Input_Handler.click(0.5, 0.8, n=max(0, card_counts[i]))
+                    # Múltiplos cliques manuais com pequeno intervalo variável
+                    n_clicks = max(0, card_counts[i])
+                    for _ in range(n_clicks):
+                        Input_Handler.click(deploy_x + random.uniform(-0.03, 0.03), deploy_y + random.uniform(-0.03, 0.03))
+                        time.sleep(random.uniform(0.08, 0.18))
+                
+                # Delay curto de estabilização pós-deploy do slot
+                time.sleep(random.uniform(0.15, 0.35))
         
         # Release secondary pointer
         Input_Handler.up(pointer=1)
+        time.sleep(random.uniform(0.1, 0.25))
         
         # Unselect last card
-        Input_Handler.click(0.01, 0.9)
+        unselect_x = 0.01 + random.uniform(0, 0.015)
+        unselect_y = 0.9 + random.uniform(-0.02, 0.02)
+        Input_Handler.click(unselect_x, unselect_y)
     
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
-        import time, numpy as np
+        import time, numpy as np, gc
+        print("Preparando posicionamento tático (zoom/scroll)...")
         
         Input_Handler.zoom(dir="out")
         Input_Handler.swipe_up()
@@ -251,6 +399,7 @@ class Attacker:
         last_card_left = 0.0
         
         while total_slots_seen < ATTACK_SLOT_RANGE[1] - ATTACK_SLOT_RANGE[0] + 1:
+            gc.collect()
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
             # Find troops to deploy
             card_centers, card_boundaries, card_types, card_counts, type_gaps_seen = self.detect_troop_positions(frame, clip_left=last_card_left, type_gaps_seen=type_gaps_seen, return_boundaries=True, return_types=True, return_counts=True)
@@ -284,13 +433,53 @@ class Attacker:
                 break
         
         # Close and reopen CoC to auto complete battle
-        if restart:
-            start_coc()
+        if AUTO_COMPLETE_BATTLE:
+            import random
+            wait_time = random.uniform(2.5, 5.5)
+            print(f"Toda a estratégia militar foi enviada ao campo. Aguardando {wait_time:.1f} segundos para sincronização dos pacotes...")
+            time.sleep(wait_time)
+            print("Reiniciando o app para computar o ataque (Auto-Complete)...")
+            if restart:
+                start_coc()
+            else:
+                stop_coc()
         else:
-            stop_coc()
+            print("AUTO_COMPLETE_BATTLE desativado. Aguardando o fim da batalha na tela (modo simulação humana)...")
+            start_wait = time.time()
+            battle_finished = False
+            last_print_time = start_wait
+            while time.time() - start_wait < 210:
+                now = time.time()
+                elapsed = int(now - start_wait)
+                if now - last_print_time >= 10:
+                    print(f"Aguardando fim da batalha... (decorrido: {elapsed} segundos)")
+                    last_print_time = now
+                
+                ox, oy = Frame_Handler.locate(self.assets["okay"], thresh=0.8)
+                if ox is not None and oy is not None:
+                    print("Batalha finalizada (botão Okay detectado). Retornando para a vila.")
+                    Input_Handler.click(ox, oy)
+                    battle_finished = True
+                    break
+                
+                rx, ry = Frame_Handler.locate(self.assets["return_home"], thresh=0.8)
+                if rx is not None and ry is not None:
+                    print("Batalha finalizada (botão Return Home detectado). Retornando para a vila.")
+                    Input_Handler.click(rx, ry)
+                    battle_finished = True
+                    break
+                
+                time.sleep(2)
+            if not battle_finished:
+                print("Tempo limite excedido esperando o fim da batalha. Forçando encerramento.")
+                if restart:
+                    start_coc()
+                else:
+                    stop_coc()
     
     def complete_builder_attack(self, restart=True):
         import numpy as np
+        import time
         
         Input_Handler.zoom(dir="out")
         Input_Handler.swipe_up()
@@ -299,17 +488,56 @@ class Attacker:
         self.deploy_troops(card_centers, card_counts=[4]*len(card_centers))
         
         # Close and reopen CoC to auto complete battle
-        if restart:
-            start_coc()
+        if AUTO_COMPLETE_BATTLE:
+            import random
+            wait_time = random.uniform(2.5, 5.5)
+            print(f"Toda a estratégia militar foi enviada ao campo. Aguardando {wait_time:.1f} segundos para sincronização dos pacotes...")
+            time.sleep(wait_time)
+            print("Reiniciando o app para computar o ataque (Auto-Complete)...")
+            if restart:
+                start_coc()
+            else:
+                stop_coc()
         else:
-            stop_coc()
+            print("AUTO_COMPLETE_BATTLE desativado. Aguardando o fim da batalha na tela (modo simulação humana)...")
+            start_wait = time.time()
+            battle_finished = False
+            last_print_time = start_wait
+            while time.time() - start_wait < 210:
+                now = time.time()
+                elapsed = int(now - start_wait)
+                if now - last_print_time >= 10:
+                    print(f"Aguardando fim da batalha... (decorrido: {elapsed} segundos)")
+                    last_print_time = now
+                
+                ox, oy = Frame_Handler.locate(self.assets["okay"], thresh=0.8)
+                if ox is not None and oy is not None:
+                    print("Batalha do construtor finalizada (botão Okay detectado). Retornando para a vila.")
+                    Input_Handler.click(ox, oy)
+                    battle_finished = True
+                    break
+                
+                rx, ry = Frame_Handler.locate(self.assets["return_home"], thresh=0.8)
+                if rx is not None and ry is not None:
+                    print("Batalha do construtor finalizada (botão Return Home detectado). Retornando para a vila.")
+                    Input_Handler.click(rx, ry)
+                    battle_finished = True
+                    break
+                
+                time.sleep(2)
+            if not battle_finished:
+                print("Tempo limite excedido esperando o fim da batalha. Forçando encerramento.")
+                if restart:
+                    start_coc()
+                else:
+                    stop_coc()
     
     # ============================================================
     # ⚔️ Attack Management
     # ============================================================
 
     @require_exit()
-    def run_home_base(self, timeout=60, restart=True):
+    def run_home_base(self, timeout=120, restart=True):
         import time
         
         try:
@@ -321,14 +549,22 @@ class Attacker:
                     break
                 except (KeyboardInterrupt, SystemExit): raise
                 except: pass
-            if time.time() - start_time >= timeout: return
+            if time.time() - start_time >= timeout:
+                print("Erro ao validar Vila Principal para ataque (Timeout).")
+                return False
             
             # Complete an attack
             if self.start_normal_attack(timeout):
                 self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
+                print("Ataque na Vila Principal concluído com sucesso!")
+                return True
+            else:
+                print("Ataque na Vila Principal não realizado (Oponente não encontrado ou erro de carregamento).")
+                return False
         
         except Exception as e:
-            if configs.DEBUG: print("attack_home_base", e)
+            print(f"Erro crítico durante o ataque na Vila Principal: {e}")
+            return False
 
     @require_exit()
     def run_builder_base(self, timeout=60, restart=True):
@@ -343,11 +579,19 @@ class Attacker:
                     break
                 except (KeyboardInterrupt, SystemExit): raise
                 except: pass
-            if time.time() - start_time >= timeout: return
+            if time.time() - start_time >= timeout:
+                print("Erro ao validar Vila do Construtor para ataque (Timeout).")
+                return False
             
             # Complete an attack
             if self.start_builder_attack(timeout):
                 self.complete_builder_attack(restart=restart)
+                print("Ataque na Vila do Construtor concluído com sucesso!")
+                return True
+            else:
+                print("Ataque na Vila do Construtor não realizado (Oponente não encontrado ou erro de carregamento).")
+                return False
         
         except Exception as e:
-            if configs.DEBUG: print("attack_builder_base", e)
+            print(f"Erro crítico durante o ataque na Vila do Construtor: {e}")
+            return False
