@@ -1,5 +1,5 @@
-from cv2 import utils
 from utils import *
+import utils
 import configs
 from configs import *
 
@@ -35,14 +35,18 @@ class Attacker:
             lambda: Frame_Handler.locate(self.assets["return_home"], thresh=0.9),
             timeout=timeout
         )
+
     def start_normal_attack(self, timeout=120):
         import time
         print("Iniciando fluxo de ataque na Vila Principal...")
         
         # Limpeza preventiva inicial para fechar possíveis pop-ups tardios pós-carregamento
-        time.sleep(1.5)
-        clear_popups()
-        time.sleep(1.0)
+        if getattr(configs, "CLEAR_POPUPS_BEFORE_ATTACK", False):
+            time.sleep(1.5)
+            clear_popups()
+            time.sleep(1.0)
+        else:
+            time.sleep(0.5)
 
         def open_attack_and_start_matchmaking():
             attack_opened = False
@@ -51,7 +55,7 @@ class Attacker:
             for attempt in range(3):
                 print(f"Tentando abrir o menu de ataque (tentativa {attempt + 1}/3)...")
                 Input_Handler.click(0.07, 0.9)
-                time.sleep(1.0) # Aguarda a animação do menu lateral deslizar
+                time.sleep(0.5) # Aguarda a animação do menu lateral deslizar
                 
                 # Aguarda até 6 segundos para ver se o botão de 'Procurar Oponente' surge na tela
                 start_check = time.time()
@@ -98,13 +102,13 @@ class Attacker:
 
         # ----------------------------------------------------------------
         # Loop de matchmaking otimizado:
-        # - Captura nova de tela a cada 1.5s (reduz carga ADB em ~67%)
+        # - Captura nova de tela a cada SCREENSHOT_INTERVALs (configurável, padrão 0.8s)
         # - Cancela e retenta automaticamente após CLOUD_CANCEL_AFTER segundos
         # - Máximo de MAX_CANCEL_RETRIES cancelamentos no mesmo ciclo
         # ----------------------------------------------------------------
         CLOUD_CANCEL_AFTER = getattr(configs, 'CLOUD_CANCEL_AFTER', 25)   # segundos antes de cancelar e retentar
         MAX_CANCEL_RETRIES = getattr(configs, 'MAX_CANCEL_RETRIES', 2)    # máximo de cancelamentos por ciclo
-        SCREENSHOT_INTERVAL = 1.5 # segundos entre capturas ADB
+        SCREENSHOT_INTERVAL = getattr(configs, 'MATCHMAKING_SCREENSHOT_INTERVAL', 0.8) # segundos entre capturas ADB
 
         for cancel_attempt in range(MAX_CANCEL_RETRIES + 1):
             if cancel_attempt == 0:
@@ -113,7 +117,7 @@ class Attacker:
                 print(f"Reiniciando busca por oponente (tentativa {cancel_attempt + 1}/{MAX_CANCEL_RETRIES + 1})...")
                 # Garante que a tela esteja limpa e reabre o menu de ataque a partir da Vila Principal
                 clear_popups()
-                time.sleep(1.0)
+                time.sleep(0.5)
                 success, find_a_match_xy = open_attack_and_start_matchmaking()
                 if not success:
                     print("Não foi possível reconfirmar o ataque após cancelamento.")
@@ -361,94 +365,81 @@ class Attacker:
                 import traceback
                 print(f"⚠️ [detect_troop_positions] Exceção inesperada: {e}")
                 traceback.print_exc()
-            return _empty_output() if (return_boundaries or return_types or return_counts) else np.array([])
-    
+
     def deploy_troops(self, card_centers, available_slots=None, card_types=None, card_counts=None):
-        import time, numpy as np, random
+        import time, numpy as np
         
         def card_gray(card_center):
-            section = Frame_Handler.get_frame_section(card_center-0.01, 0.89, card_center+0.01, 0.91, grayscale=False)
-            return np.all(section[:, :, 0] == section[:, :, 1]) and np.all(section[:, :, 1] == section[:, :, 2])
+            """Retorna True se o card esta cinza (esgotado / tropa lancada)."""
+            section = Frame_Handler.get_frame_section(
+                card_center - 0.015, 0.875,
+                card_center + 0.015, 0.915,
+                grayscale=False
+            )
+            if section is None or section.size == 0:
+                return False
+            # Converte para int16 para evitar overflow em subtração com uint8
+            r = section[:, :, 0].astype(np.int16)
+            g = section[:, :, 1].astype(np.int16)
+            b = section[:, :, 2].astype(np.int16)
+            
+            # Pixels cinzas têm canais RGB muito próximos (baixa saturação)
+            gray_pixels = (np.abs(r - g) < 12) & (np.abs(g - b) < 12) & (np.abs(r - b) < 12)
+            
+            # Se mais de 80% dos pixels forem cinzas, consideramos o card esgotado
+            return np.mean(gray_pixels) > 0.80
         
         if available_slots is None: available_slots = [1] * len(card_centers)
-        if card_types is None: card_types = [None] * len(card_centers)
-        if card_counts is None: card_counts = [0] * len(card_centers)
+        if card_types is None:      card_types = [None] * len(card_centers)
+        if card_counts is None:     card_counts = [0] * len(card_centers)
         
-        active_count = sum(available_slots)
-        if active_count == 0:
-            print("⚠️ [deploy_troops] Nenhum slot ativo para deploy. Pulando.")
-            return
+        # Start holding deploy position w/ secondary touch pointer (ponto fixo original)
+        Input_Handler.down(0.5, 0.8, pointer=1)
         
-        print(f"⚔️ [deploy_troops] Iniciando deploy de {active_count} grupo(s). Slots disponíveis: {list(available_slots)}")
+        deployed_ok = 0
+        deploy_failed = 0
         
-        # ─── FIX Bug #3: sleep após down(pointer=1) para garantir que o hold está
-        # ativo no minitouch ANTES de enviar os clicks de seleção de card.
-        # Sem este sleep, o click chega ao servidor minitouch antes do down, causando
-        # inputs fora de ordem e deploy em posições erradas.
-        hold_x = 0.5 + random.uniform(-0.05, 0.05)
-        hold_y = 0.8 + random.uniform(-0.05, 0.05)
-        Input_Handler.down(hold_x, hold_y, pointer=1)
-        time.sleep(0.30)  # aguarda minitouch registrar o hold (era 0.1–0.25, insuficiente)
-        
-        for slot_idx in range(len(card_centers)):
-            if not available_slots[slot_idx]:
-                continue
-            
-            slot_type = card_types[slot_idx] if card_types[slot_idx] else "desconhecido"
-            slot_count = card_counts[slot_idx]
-            print(f"   → Slot {slot_idx+1}/{len(card_centers)} | tipo={slot_type} | qtd={slot_count} | x={card_centers[slot_idx]:.3f}")
-            
-            # Delay variável antes de interagir com o slot
-            time.sleep(random.uniform(0.12, 0.32))
-            
-            # Seleciona o card no menu inferior (com leve ruído para simular toque humano)
-            card_click_x = card_centers[slot_idx] + random.uniform(-0.008, 0.008)
-            card_click_y = 0.9 + random.uniform(-0.01, 0.01)
-            Input_Handler.click(card_click_x, card_click_y)
-            time.sleep(random.uniform(0.15, 0.30))  # aguarda o card ser selecionado na UI
-            
-            # Coordenada de deploy no campo (ligeiramente variada por slot)
-            deploy_x = 0.5 + random.uniform(-0.06, 0.06)
-            deploy_y = 0.8 + random.uniform(-0.06, 0.06)
-            
-            if slot_type in ["hero", "clan"]:
-                print(f"     [deploy] {slot_type.upper()} → clique único em ({deploy_x:.3f}, {deploy_y:.3f})")
-                Input_Handler.click(deploy_x, deploy_y)
-            elif slot_type == "troop":
-                deploy_time = configs.TROOP_DEPLOY_TIME * random.uniform(0.85, 1.15)
-                print(f"     [deploy] TROOP → hold por {deploy_time:.2f}s em ({deploy_x:.3f}, {deploy_y:.3f})")
-                Input_Handler.down(deploy_x, deploy_y, pointer=0)
-                end_time = time.monotonic() + deploy_time
-                while time.monotonic() < end_time and not card_gray(card_centers[slot_idx]):
-                    time.sleep(0.01)
-                Input_Handler.up(pointer=0)
-            elif slot_type == "spell":
-                n_spell = card_counts[slot_idx]
-                print(f"     [deploy] SPELL → {n_spell} lançamento(s) dispersos")
-                rxs = np.random.uniform(0.35, 0.65, n_spell)
-                rys = np.random.uniform(0.45, 0.55, n_spell)
-                for coord in zip(rxs, rys):
-                    Input_Handler.click(coord[0] + random.uniform(-0.02, 0.02), coord[1] + random.uniform(-0.02, 0.02))
-                    time.sleep(random.uniform(0.1, 0.25))
+        for i in range(len(card_centers)):
+            if available_slots[i]:
+                # Select slot (clique exato no card no y=0.9 fixo)
+                Input_Handler.click(card_centers[i], 0.9)
+                
+                # Deploy selected slot idêntico ao original
+                if card_types[i] in ["hero", "clan"]:
+                    Input_Handler.click(0.5, 0.8)
+                    deployed_ok += 1
+                elif card_types[i] == "troop":
+                    Input_Handler.down(0.5, 0.8, pointer=0)
+                    end_time = time.monotonic() + TROOP_DEPLOY_TIME
+                    last_check_time = 0.0
+                    while time.monotonic() < end_time:
+                        now = time.monotonic()
+                        if now - last_check_time >= 0.20:
+                            if card_gray(card_centers[i]):
+                                break
+                            last_check_time = now
+                        time.sleep(0.02)
+                    Input_Handler.up(pointer=0)
+                    deployed_ok += 1
+                elif card_types[i] == "spell":
+                    n = card_counts[i]
+                    rxs = np.random.uniform(0.35, 0.65, n)
+                    rys = np.random.uniform(0.45, 0.55, n)
+                    for coord in zip(rxs, rys):
+                        Input_Handler.click(*coord)
+                    deployed_ok += 1
+                else:
+                    Input_Handler.click(0.5, 0.8, n=max(0, card_counts[i]))
+                    deployed_ok += 1
             else:
-                n_clicks = max(0, card_counts[slot_idx])
-                print(f"     [deploy] TIPO DESCONHECIDO → {n_clicks} clique(s) em ({deploy_x:.3f}, {deploy_y:.3f})")
-                for _ in range(n_clicks):
-                    Input_Handler.click(deploy_x + random.uniform(-0.03, 0.03), deploy_y + random.uniform(-0.03, 0.03))
-                    time.sleep(random.uniform(0.08, 0.18))
-            
-            # Delay de estabilização pós-deploy do slot
-            time.sleep(random.uniform(0.15, 0.35))
+                deploy_failed += 1
         
         # Release secondary pointer
         Input_Handler.up(pointer=1)
-        time.sleep(random.uniform(0.1, 0.25))
         
-        # Unselect last card (clique em área vazia à esquerda)
-        unselect_x = 0.01 + random.uniform(0, 0.015)
-        unselect_y = 0.9 + random.uniform(-0.02, 0.02)
-        Input_Handler.click(unselect_x, unselect_y)
-        print(f"✅ [deploy_troops] Deploy concluído. {active_count} grupo(s) enviados ao campo.")
+        # Unselect last card
+        Input_Handler.click(0.01, 0.9)
+        return deployed_ok, deploy_failed
     
     def complete_normal_attack(self, restart=True, exclude_clan_troops=False):
         import time, numpy as np, gc
@@ -462,6 +453,8 @@ class Attacker:
         last_card_left = 0.0
         deploy_iterations = 0
         MAX_DEPLOY_ITERATIONS = 20  # segurança contra loop infinito
+        total_deployed_ok = 0   # acumulador: slots confirmados com card cinza
+        total_deploy_fail = 0   # acumulador: slots com deploy duvidoso
         
         print(f"🗺️ [complete_normal_attack] Iniciando varredura de slots. Range alvo: {ATTACK_SLOT_RANGE}")
         
@@ -510,24 +503,42 @@ class Attacker:
             
             # Deploy troops up until the last one visible
             total_slots_seen += len(card_centers) - 1
-            self.deploy_troops(card_centers[:-1], available_slots[:-1], card_types[:-1], card_counts[:-1])
+            ok, fail = self.deploy_troops(card_centers[:-1], available_slots[:-1], card_types[:-1], card_counts[:-1])
+            total_deployed_ok  += ok
+            total_deploy_fail  += fail
             
             # Scroll over and look for the new position of the last card
             last_card_frame = frame[:, int(card_boundaries[-2] * frame.shape[1]):int(card_boundaries[-1] * frame.shape[1])]
             print(f"   Scrollando para encontrar próximo card (x: {card_centers[-1]:.3f} → 0.038)...")
             Input_Handler.swipe_left(x1=card_centers[-1], x2=0.038, y=0.9, hold_end_time=500)
-            time.sleep(0.5)
+            time.sleep(0.25)
             frame = Frame_Handler.get_frame_section(0.0, 0.82, 1.0, 1.0, grayscale=False)
             last_card_left = Frame_Handler.locate(last_card_frame, frame, thresh=0.9, grayscale=False, ref="lc")[0]
             
             # If the card didn't move then there are no more troops so it can be deployed
             if last_card_left is not None and abs(last_card_left - card_boundaries[-2]) < 0.01:
                 print(f"   Último card não se moveu — todos os slots varridos. Deployando último card.")
-                self.deploy_troops(card_centers[-1:], available_slots[-1:], card_types[-1:], card_counts[-1:])
+                ok, fail = self.deploy_troops(card_centers[-1:], available_slots[-1:], card_types[-1:], card_counts[-1:])
+                total_deployed_ok += ok
+                total_deploy_fail += fail
                 break
             elif last_card_left is None:
                 print("   Último card não localizado após scroll. Encerrando varredura.")
                 break
+        
+        # ── Relatorio final de deploy ───────────────────────────────────────
+        total_tried = total_deployed_ok + total_deploy_fail
+        if total_tried == 0:
+            print("⚠️ [complete_normal_attack] Nenhum slot foi deployado durante o ataque!")
+        elif total_deploy_fail == 0:
+            print(f"✅ [complete_normal_attack] DEPLOY COMPLETO: {total_deployed_ok}/{total_tried} slots confirmados.")
+        else:
+            pct = total_deployed_ok / total_tried * 100
+            print(
+                f"⚠️ [complete_normal_attack] DEPLOY PARCIAL: "
+                f"{total_deployed_ok} confirmados, {total_deploy_fail} possiveis falhas "
+                f"({pct:.0f}% de sucesso)"
+            )
         
         # Close and reopen CoC to auto complete battle
         if AUTO_COMPLETE_BATTLE:

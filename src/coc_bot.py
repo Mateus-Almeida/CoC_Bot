@@ -215,24 +215,28 @@ class CoC_Bot:
         raise Exception("BlueStacks falhou ao iniciar.")
 
     def check_bluestacks(self):
-        import psutil
+        import psutil, sys
         for proc in psutil.process_iter(['name']):
             if proc.info['name']:
                 name = proc.info['name'].lower()
-                if 'bluestacks' in name or 'hd-player' in name:
-                    return True
+                if sys.platform == "win32":
+                    if 'hd-player.exe' in name:
+                        return True
+                else:
+                    if 'bluestacks' in name or 'hd-player' in name:
+                        return True
         return False
 
     def connect_adb(self):
-        for _ in range(120):
+        for attempt in range(30):
             try:
                 connect_adb()
                 if configs.DEBUG: print("ADB conectado com sucesso.")
                 return
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print("connect_adb", e)
-            time.sleep(0.5)
+                if configs.DEBUG: print(f"connect_adb (tentativa {attempt + 1}/30): {e}")
+            time.sleep(2.0)
         raise Exception("Falha ao conectar ao ADB.")
 
     def restart_bluestacks_flow(self):

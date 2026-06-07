@@ -100,17 +100,15 @@ def connect_adb():
     subprocess.run(["adb", "start-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     res = adbutils.adb.connect(ADB_ADDRESS)
     if "connected" not in res:
-        subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        raise Exception("Failed to connect to ADB.")
+        raise Exception(f"Failed to connect to ADB: {res}")
     device, mt_device = None, None
     try:
         device = adbutils.device(ADB_ADDRESS)
         mt_device = MNTDevice(ADB_ADDRESS)
         Exit_Handler.register(mt_device.stop)
     except (KeyboardInterrupt, SystemExit): raise
-    except:
-        subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        raise Exception("Failed to get ADB device.")
+    except Exception as e:
+        raise Exception(f"Failed to get ADB device or initialize Minitouch: {e}")
     ADB_DEVICE, MINITOUCH_DEVICE = device, mt_device
 
 def running():
@@ -443,10 +441,39 @@ def start_coc(timeout=60):
     
     try:
         if not running(): return False
+
+        # ── Fast-path: verifica se o CoC já está rodando e responsivo ──────────
+        # Tira um screenshot e tenta detectar a tela principal (home ou builder).
+        # Se detectar, não há necessidade de fechar/reabrir o app — economiza ~10s.
+        try:
+            Frame_Handler.get_frame()
+            _already_home = False
+            try:
+                get_home_builders(0, return_amount=False, use_cached_frame=True, silent=True)
+                CACHE["location"] = "home_base"
+                _already_home = True
+            except (KeyboardInterrupt, SystemExit): raise
+            except: pass
+
+            if not _already_home:
+                try:
+                    get_builder_builders(0, return_amount=False, use_cached_frame=True, silent=True)
+                    CACHE["location"] = "builder_base"
+                    _already_home = True
+                except (KeyboardInterrupt, SystemExit): raise
+                except: pass
+
+            if _already_home:
+                print("Clash of Clans já está aberto e responsivo. Pulando reinicialização.")
+                return True
+        except (KeyboardInterrupt, SystemExit): raise
+        except: pass
+        # ─────────────────────────────────────────────────────────────────────────
+
         to_system_home()
         print("Iniciando Clash of Clans...")
         
-        # Inicia o app limpando a instância anterior apenas uma vez
+        # Inicia o app forçando encerramento da instância anterior (-S)
         ADB_DEVICE.shell("am start -S -n com.supercell.clashofclans/com.supercell.titan.GameApp")
         
         print("Aguardando carregamento inicial da Supercell (6 segundos)...")
@@ -457,7 +484,7 @@ def start_coc(timeout=60):
         while time.time() - start < timeout:
             if not running(): return False
             
-            # Se após 25 segundos não iniciou, tenta forçar a inicialização sem matar o processo
+            # Se após 25 segundos não iniciou, tenta forçar sem matar o processo
             if i > 0 and (i % 25 == 0):
                 ADB_DEVICE.shell("am start -n com.supercell.clashofclans/com.supercell.titan.GameApp")
                 
@@ -483,7 +510,7 @@ def start_coc(timeout=60):
             if cont_x is not None and cont_y is not None:
                 Input_Handler.click(cont_x, cont_y)
             
-            # Verifica atualizações esporadicamente (cada 10 segundos) para não sobrecarregar
+            # Verifica atualizações esporadicamente (cada 10 segundos)
             if i % 10 == 0:
                 update_coc(timeout=5, from_in_game=True)
             
@@ -964,10 +991,10 @@ def clear_popups():
         try:
             print("Limpando possíveis pop-ups/janelas (tecla Voltar)...")
             ADB_DEVICE.shell("input keyevent 4")
-            time.sleep(0.5)
+            time.sleep(0.3)
             # Clica em área neutra superior para fechar o diálogo de confirmação de saída do jogo caso estivesse limpo
             Input_Handler.click(0.5, 0.1)
-            time.sleep(0.5)
+            time.sleep(0.3)
             
             # Verifica se há botão "okay" residual na tela (em caso de pop-ups persistentes)
             if hasattr(Asset_Manager, 'attacker_assets') and "okay" in Asset_Manager.attacker_assets:
@@ -975,7 +1002,7 @@ def clear_popups():
                 if ok_x is not None and ok_y is not None:
                     print("Botão 'Okay' residual detectado durante limpeza. Clicando...")
                     Input_Handler.click(ok_x, ok_y)
-                    time.sleep(0.5)
+                    time.sleep(0.3)
         except Exception as e:
             if configs.DEBUG: print("Erro ao limpar pop-ups:", e)
 
