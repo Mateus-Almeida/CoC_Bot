@@ -1,0 +1,166 @@
+2026-06-07 16:11:48 | INFO | [90m[16:11:48][0m Pré-inicializando o EasyOCR em segundo plano...
+2026-06-07 16:11:48 | INFO | [90m[16:11:48][0m BlueStacks já está em execução.
+2026-06-07 16:11:53 | ERROR | Neither CUDA nor MPS are available - defaulting to CPU. Note: This module is much faster with a GPU.
+2026-06-07 16:11:55 | INFO | [90m[16:11:55][0m [92mEasyOCR pré-inicializado com sucesso.[0m
+2026-06-07 16:11:57 | INFO | [90m[16:11:57][0m [92mADB conectado com sucesso.[0m
+2026-06-07 16:11:57 | INFO | [90m[16:11:57][0m 🤖 CoC Bot inicializado. Sessão iniciada às 16:11:48
+2026-06-07 16:11:57 | INFO | [90m[16:11:57][0m [95m[1m--- Iniciando loop principal do CoC Bot ---[0m
+2026-06-07 16:11:57 | INFO | [90m[16:11:57][0m [95m[1m--- Iniciando um novo ciclo de verificação ---[0m
+2026-06-07 16:11:58 | INFO | [90m[16:11:58][0m [96mIniciando Clash of Clans...[0m
+2026-06-07 16:11:58 | INFO | [90m[16:11:58][0m [96mAguardando carregamento inicial da Supercell (6 segundos)...[0m
+2026-06-07 16:12:15 | INFO | [90m[16:12:15][0m [92mClash of Clans iniciado com sucesso.[0m
+2026-06-07 16:12:15 | INFO | [90m[16:12:15][0m default
+2026-06-07 16:12:15 | INFO | [90m[16:12:15][0m [92m
+⚔️  [Ataque #1] 🏠 Home Base — iniciado às 16:12:15[0m
+2026-06-07 16:12:18 | INFO | [90m[16:12:18][0m [96mIniciando fluxo de ataque na Vila Principal...[0m
+2026-06-07 16:12:20 | INFO | [90m[16:12:20][0m Limpando possíveis pop-ups/janelas (tecla Voltar)...
+2026-06-07 16:12:24 | INFO | [90m[16:12:24][0m Tentando abrir o menu de ataque (tentativa 1/3)...
+2026-06-07 16:12:27 | INFO | [90m[16:12:27][0m [92mBotão 'Procurar Oponente' localizado com sucesso! Clicando...[0m
+2026-06-07 16:12:27 | INFO | [90m[16:12:27][0m [96mBuscando confirmação de ataque (botão amarelo de ouro)...[0m
+2026-06-07 16:12:29 | INFO | [90m[16:12:29][0m [96mCarregando o campo de batalha nas nuvens...[0m
+2026-06-07 16:12:36 | INFO | [90m[16:12:36][0m [92mVila oponente carregada com sucesso! Batalha iniciada (5s nas nuvens).[0m
+2026-06-07 16:12:36 | INFO | [90m[16:12:36][0m [96mPreparando posicionamento tático (zoom out + scroll up)...[0m
+2026-06-07 16:12:37 | INFO | [90m[16:12:37][0m [96m🗺️ [complete_normal_attack] Iniciando varredura de slots. Range alvo: (0, 100)[0m
+2026-06-07 16:12:43 | INFO | [90m[16:12:43][0m [96m🔍 [detect_troop_positions] 11 card(s) detectado(s): ['troop', 'troop', 'troop', 'clan', 'hero', 'hero', 'hero', 'hero', 'spell', 'spell', 'spell'][0m
+2026-06-07 16:12:43 | INFO | [90m[16:12:43][0m [96m📋 [complete_normal_attack] Iteração 1: 11 card(s) visíveis. Total acumulado: 0[0m
+2026-06-07 16:12:43 | INFO | [90m[16:12:43][0m [96m⚔️ [deploy_troops] Iniciando deploy de 10.0 grupo(s). Slots disponíveis: [np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0)][0m
+2026-06-07 16:12:44 | INFO | [90m[16:12:44][0m [37m   → Slot 1/10 | tipo=troop | qtd=-1 | x=0.107[0m
+2026-06-07 16:12:44 | INFO | [90m[16:12:44][0m [96m     [deploy] TROOP → hold por 2.04s em (0.506, 0.771)[0m
+2026-06-07 16:12:48 | INFO | [90m[16:12:48][0m [37m   → Slot 2/10 | tipo=troop | qtd=-1 | x=0.183[0m
+2026-06-07 16:12:48 | INFO | [90m[16:12:48][0m [96m     [deploy] TROOP → hold por 2.05s em (0.501, 0.780)[0m
+2026-06-07 16:12:51 | INFO | [90m[16:12:51][0m [37m   → Slot 3/10 | tipo=troop | qtd=-1 | x=0.258[0m
+2026-06-07 16:12:52 | INFO | [90m[16:12:52][0m [96m     [deploy] TROOP → hold por 2.05s em (0.505, 0.849)[0m
+2026-06-07 16:12:55 | INFO | [90m[16:12:55][0m [37m   → Slot 4/10 | tipo=clan | qtd=1 | x=0.348[0m
+2026-06-07 16:12:55 | INFO | [90m[16:12:55][0m [96m     [deploy] CLAN → clique único em (0.468, 0.749)[0m
+2026-06-07 16:12:56 | INFO | [90m[16:12:56][0m [37m   → Slot 5/10 | tipo=hero | qtd=1 | x=0.427[0m
+2026-06-07 16:12:56 | INFO | [90m[16:12:56][0m [96m     [deploy] HERO → clique único em (0.546, 0.789)[0m
+2026-06-07 16:12:57 | INFO | [90m[16:12:57][0m [37m   → Slot 6/10 | tipo=hero | qtd=1 | x=0.502[0m
+2026-06-07 16:12:57 | INFO | [90m[16:12:57][0m [96m     [deploy] HERO → clique único em (0.476, 0.834)[0m
+2026-06-07 16:12:58 | INFO | [90m[16:12:58][0m [37m   → Slot 7/10 | tipo=hero | qtd=1 | x=0.578[0m
+2026-06-07 16:12:58 | INFO | [90m[16:12:58][0m [96m     [deploy] HERO → clique único em (0.506, 0.753)[0m
+2026-06-07 16:12:59 | INFO | [90m[16:12:59][0m [37m   → Slot 8/10 | tipo=hero | qtd=1 | x=0.653[0m
+2026-06-07 16:12:59 | INFO | [90m[16:12:59][0m [96m     [deploy] HERO → clique único em (0.478, 0.794)[0m
+2026-06-07 16:13:00 | INFO | [90m[16:13:00][0m [37m   → Slot 9/10 | tipo=spell | qtd=8 | x=0.738[0m
+2026-06-07 16:13:00 | INFO | [90m[16:13:00][0m [96m     [deploy] SPELL → 8 lançamento(s) dispersos[0m
+2026-06-07 16:13:04 | INFO | [90m[16:13:04][0m [37m   → Slot 10/10 | tipo=spell | qtd=1 | x=0.814[0m
+2026-06-07 16:13:04 | INFO | [90m[16:13:04][0m [96m     [deploy] SPELL → 1 lançamento(s) dispersos[0m
+2026-06-07 16:13:05 | INFO | [90m[16:13:05][0m [92m✅ [deploy_troops] Deploy concluído. 10.0 grupo(s) enviados ao campo.[0m
+2026-06-07 16:13:05 | INFO | [90m[16:13:05][0m [37m   Scrollando para encontrar próximo card (x: 0.889 → 0.038)...[0m
+2026-06-07 16:13:08 | INFO | [90m[16:13:08][0m [96m   Último card não se moveu — todos os slots varridos. Deployando último card.[0m
+2026-06-07 16:13:08 | INFO | [90m[16:13:08][0m [96m⚔️ [deploy_troops] Iniciando deploy de 1.0 grupo(s). Slots disponíveis: [np.float64(1.0)][0m
+2026-06-07 16:13:09 | INFO | [90m[16:13:09][0m [37m   → Slot 1/1 | tipo=spell | qtd=1 | x=0.889[0m
+2026-06-07 16:13:09 | INFO | [90m[16:13:09][0m [96m     [deploy] SPELL → 1 lançamento(s) dispersos[0m
+2026-06-07 16:13:10 | INFO | [90m[16:13:10][0m [92m✅ [deploy_troops] Deploy concluído. 1.0 grupo(s) enviados ao campo.[0m
+2026-06-07 16:13:10 | INFO | [90m[16:13:10][0m [96mToda a estratégia militar foi enviada ao campo. Aguardando 5.2 segundos para sincronização dos pacotes...[0m
+2026-06-07 16:13:15 | INFO | [90m[16:13:15][0m [95m[1mReiniciando o app para computar o ataque (Auto-Complete)...[0m
+2026-06-07 16:13:15 | INFO | [90m[16:13:15][0m Fechando Clash of Clans...
+2026-06-07 16:13:16 | INFO | [90m[16:13:16][0m Clash of Clans fechado.
+2026-06-07 16:13:16 | INFO | [90m[16:13:16][0m [92mAtaque na Vila Principal concluído com sucesso![0m
+2026-06-07 16:13:17 | INFO | [90m[16:13:17][0m [92m   ✅ SUCESSO — duração: 1m01s[0m
+2026-06-07 16:13:17 | INFO | [90m[16:13:17][0m Executando limpeza preventiva de memória no emulador...
+2026-06-07 16:13:17 | INFO | [90m[16:13:17][0m Limpeza de memória do emulador concluída.
+2026-06-07 16:13:17 | INFO | [90m[16:13:17][0m [92m📊 Resumo acumulado: 1 ataques | ✅ 1 sucessos | ❌ 0 falhas | Taxa: 100.0%[0m
+2026-06-07 16:13:17 | INFO | [90m[16:13:17][0m [95m[1m✅ Ciclo concluído. Próxima execução em ~1 min.[0m
+2026-06-07 16:14:14 | INFO | [90m[16:14:14][0m [95m[1m--- Iniciando um novo ciclo de verificação ---[0m
+2026-06-07 16:14:15 | INFO | [90m[16:14:15][0m [96mIniciando Clash of Clans...[0m
+2026-06-07 16:14:15 | INFO | [90m[16:14:15][0m [96mAguardando carregamento inicial da Supercell (6 segundos)...[0m
+2026-06-07 16:14:34 | INFO | [90m[16:14:34][0m [92mClash of Clans iniciado com sucesso.[0m
+2026-06-07 16:14:34 | INFO | [90m[16:14:34][0m default
+2026-06-07 16:14:34 | INFO | [90m[16:14:34][0m [92m
+⚔️  [Ataque #2] 🏠 Home Base — iniciado às 16:14:34[0m
+2026-06-07 16:14:36 | INFO | [90m[16:14:36][0m [96mIniciando fluxo de ataque na Vila Principal...[0m
+2026-06-07 16:14:38 | INFO | [90m[16:14:38][0m Limpando possíveis pop-ups/janelas (tecla Voltar)...
+2026-06-07 16:14:42 | INFO | [90m[16:14:42][0m Tentando abrir o menu de ataque (tentativa 1/3)...
+2026-06-07 16:14:50 | INFO | [90m[16:14:50][0m [92mBotão 'Procurar Oponente' localizado com sucesso! Clicando...[0m
+2026-06-07 16:14:50 | INFO | [90m[16:14:50][0m [96mBuscando confirmação de ataque (botão amarelo de ouro)...[0m
+2026-06-07 16:14:52 | INFO | [90m[16:14:52][0m [96mCarregando o campo de batalha nas nuvens...[0m
+2026-06-07 16:14:56 | INFO | [90m[16:14:56][0m [92mVila oponente carregada com sucesso! Batalha iniciada (1s nas nuvens).[0m
+2026-06-07 16:14:56 | INFO | [90m[16:14:56][0m [96mPreparando posicionamento tático (zoom out + scroll up)...[0m
+2026-06-07 16:14:56 | INFO | [90m[16:14:56][0m [96m🗺️ [complete_normal_attack] Iniciando varredura de slots. Range alvo: (0, 100)[0m
+2026-06-07 16:14:58 | INFO | [90m[16:14:58][0m [96m🔍 [detect_troop_positions] 11 card(s) detectado(s): ['troop', 'troop', 'troop', 'clan', 'hero', 'hero', 'hero', 'hero', 'spell', 'spell', 'spell'][0m
+2026-06-07 16:14:58 | INFO | [90m[16:14:58][0m [96m📋 [complete_normal_attack] Iteração 1: 11 card(s) visíveis. Total acumulado: 0[0m
+2026-06-07 16:14:58 | INFO | [90m[16:14:58][0m [96m⚔️ [deploy_troops] Iniciando deploy de 10.0 grupo(s). Slots disponíveis: [np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0), np.float64(1.0)][0m
+2026-06-07 16:14:58 | INFO | [90m[16:14:58][0m [37m   → Slot 1/10 | tipo=troop | qtd=-1 | x=0.107[0m
+2026-06-07 16:14:59 | INFO | [90m[16:14:59][0m [96m     [deploy] TROOP → hold por 1.82s em (0.478, 0.827)[0m
+2026-06-07 16:15:02 | INFO | [90m[16:15:02][0m [37m   → Slot 2/10 | tipo=troop | qtd=-1 | x=0.183[0m
+2026-06-07 16:15:03 | INFO | [90m[16:15:03][0m [96m     [deploy] TROOP → hold por 1.77s em (0.556, 0.789)[0m
+2026-06-07 16:15:06 | INFO | [90m[16:15:06][0m [37m   → Slot 3/10 | tipo=troop | qtd=-1 | x=0.258[0m
+2026-06-07 16:15:07 | INFO | [90m[16:15:07][0m [96m     [deploy] TROOP → hold por 1.96s em (0.459, 0.819)[0m
+2026-06-07 16:15:10 | INFO | [90m[16:15:10][0m [37m   → Slot 4/10 | tipo=clan | qtd=1 | x=0.348[0m
+2026-06-07 16:15:11 | INFO | [90m[16:15:11][0m [96m     [deploy] CLAN → clique único em (0.490, 0.829)[0m
+2026-06-07 16:15:11 | INFO | [90m[16:15:11][0m [37m   → Slot 5/10 | tipo=hero | qtd=1 | x=0.427[0m
+2026-06-07 16:15:12 | INFO | [90m[16:15:12][0m [96m     [deploy] HERO → clique único em (0.487, 0.806)[0m
+2026-06-07 16:15:12 | INFO | [90m[16:15:12][0m [37m   → Slot 6/10 | tipo=hero | qtd=1 | x=0.502[0m
+2026-06-07 16:15:13 | INFO | [90m[16:15:13][0m [96m     [deploy] HERO → clique único em (0.553, 0.745)[0m
+2026-06-07 16:15:13 | INFO | [90m[16:15:13][0m [37m   → Slot 7/10 | tipo=hero | qtd=1 | x=0.578[0m
+2026-06-07 16:15:13 | INFO | [90m[16:15:13][0m [96m     [deploy] HERO → clique único em (0.546, 0.802)[0m
+2026-06-07 16:15:14 | INFO | [90m[16:15:14][0m [37m   → Slot 8/10 | tipo=hero | qtd=1 | x=0.653[0m
+2026-06-07 16:15:14 | INFO | [90m[16:15:14][0m [96m     [deploy] HERO → clique único em (0.473, 0.818)[0m
+2026-06-07 16:15:15 | INFO | [90m[16:15:15][0m [37m   → Slot 9/10 | tipo=spell | qtd=8 | x=0.738[0m
+2026-06-07 16:15:15 | INFO | [90m[16:15:15][0m [96m     [deploy] SPELL → 8 lançamento(s) dispersos[0m
+2026-06-07 16:15:18 | INFO | [90m[16:15:18][0m [37m   → Slot 10/10 | tipo=spell | qtd=1 | x=0.814[0m
+2026-06-07 16:15:19 | INFO | [90m[16:15:19][0m [96m     [deploy] SPELL → 1 lançamento(s) dispersos[0m
+2026-06-07 16:15:20 | INFO | [90m[16:15:20][0m [92m✅ [deploy_troops] Deploy concluído. 10.0 grupo(s) enviados ao campo.[0m
+2026-06-07 16:15:20 | INFO | [90m[16:15:20][0m [37m   Scrollando para encontrar próximo card (x: 0.889 → 0.038)...[0m
+2026-06-07 16:15:23 | INFO | [90m[16:15:23][0m [96m   Último card não se moveu — todos os slots varridos. Deployando último card.[0m
+2026-06-07 16:15:23 | INFO | [90m[16:15:23][0m [96m⚔️ [deploy_troops] Iniciando deploy de 1.0 grupo(s). Slots disponíveis: [np.float64(1.0)][0m
+2026-06-07 16:15:23 | INFO | [90m[16:15:23][0m [37m   → Slot 1/1 | tipo=spell | qtd=1 | x=0.889[0m
+2026-06-07 16:15:24 | INFO | [90m[16:15:24][0m [96m     [deploy] SPELL → 1 lançamento(s) dispersos[0m
+2026-06-07 16:15:25 | INFO | [90m[16:15:25][0m [92m✅ [deploy_troops] Deploy concluído. 1.0 grupo(s) enviados ao campo.[0m
+2026-06-07 16:15:25 | INFO | [90m[16:15:25][0m [96mToda a estratégia militar foi enviada ao campo. Aguardando 2.9 segundos para sincronização dos pacotes...[0m
+2026-06-07 16:15:28 | INFO | [90m[16:15:28][0m [95m[1mReiniciando o app para computar o ataque (Auto-Complete)...[0m
+2026-06-07 16:15:28 | INFO | [90m[16:15:28][0m Fechando Clash of Clans...
+2026-06-07 16:15:29 | INFO | [90m[16:15:29][0m Clash of Clans fechado.
+2026-06-07 16:15:29 | INFO | [90m[16:15:29][0m [92mAtaque na Vila Principal concluído com sucesso![0m
+2026-06-07 16:15:29 | INFO | [90m[16:15:29][0m [92m   ✅ SUCESSO — duração: 0m55s[0m
+2026-06-07 16:15:29 | INFO | [90m[16:15:29][0m Executando limpeza preventiva de memória no emulador...
+2026-06-07 16:15:30 | INFO | [90m[16:15:30][0m Limpeza de memória do emulador concluída.
+2026-06-07 16:15:30 | INFO | [90m[16:15:30][0m [92m📊 Resumo acumulado: 2 ataques | ✅ 2 sucessos | ❌ 0 falhas | Taxa: 100.0%[0m
+2026-06-07 16:15:30 | INFO | [90m[16:15:30][0m [95m[1m✅ Ciclo concluído. Próxima execução em ~1 min.[0m
+2026-06-07 16:15:31 | INFO | [90m[16:15:31][0m 
+🛑 Encerrando CoC Bot por solicitação do usuário...
+2026-06-07 16:15:31 | INFO | ╔══════════════════════════════════════════════════════════╗
+║                 📊 RELATÓRIO DA SESSÃO                   ║
+╠══════════════════════════════════════════════════════════╣
+║  Início da sessão : 07/06/2026 16:11:48                ║
+║  Encerramento     : 07/06/2026 16:15:31                ║
+║  Duração total    : 3min 43s                           ║
+╠══════════════════════════════════════════════════════════╣
+║  Total de ataques : 2                                  ║
+║  ✅ Sucessos      : 2                                  ║
+║  ❌ Falhas        : 0                                  ║
+║  Taxa de sucesso  : 100.0%                             ║
+╚══════════════════════════════════════════════════════════╝
+2026-06-07 16:15:31 | INFO | 
+╔══════════════════════════════════════════════════════════╗
+║                 📊 RELATÓRIO DA SESSÃO                   ║
+╠══════════════════════════════════════════════════════════╣
+║  Início da sessão : 07/06/2026 16:11:48                ║
+║  Encerramento     : 07/06/2026 16:15:31                ║
+║  Duração total    : 3min 43s                           ║
+╠══════════════════════════════════════════════════════════╣
+║  Total de ataques : 2                                  ║
+║  ✅ Sucessos      : 2                                  ║
+║  ❌ Falhas        : 0                                  ║
+║  Taxa de sucesso  : 100.0%                             ║
+╚══════════════════════════════════════════════════════════╝
+
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m Traceback (most recent call last):
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m   File "C:\Users\almeima2\Pictures\MM\M_CoC_Bot\src\main.py", line 6, in <module>
+    launch()
+    ~~~~~~^^
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m   File "C:\Users\almeima2\Pictures\MM\M_CoC_Bot\src\launch.py", line 60, in launch
+    else: cmd_launch(args)
+          ~~~~~~~~~~^^^^^^
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m   File "C:\Users\almeima2\Pictures\MM\M_CoC_Bot\src\launch.py", line 14, in cmd_launch
+    launch_proc(args)
+    ~~~~~~~~~~~^^^^^^
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m   File "C:\Users\almeima2\Pictures\MM\M_CoC_Bot\src\launch.py", line 9, in launch_proc
+    bot.run()
+    ~~~~~~~^^
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m   File "C:\Users\almeima2\Pictures\MM\M_CoC_Bot\src\coc_bot.py", line 387, in run
+    time.sleep(actual_wait)
+    ~~~~~~~~~~^^^^^^^^^^^^^
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m   File "C:\Users\almeima2\Pictures\MM\M_CoC_Bot\src\utils.py", line 652, in handle_sig
+    raise KeyboardInterrupt
+2026-06-07 16:15:31 | ERROR | [90m[16:15:31][0m KeyboardInterrupt
