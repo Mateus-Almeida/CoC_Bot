@@ -75,6 +75,8 @@ class Upgrader:
                 if configs.DEBUG: Frame_Handler.save_frame(section, "debug/resources.png")
                 text = OCR_Handler.get_text(section)
                 if configs.DEBUG: print(text)
+                if len(text) < 3:
+                    raise Exception(f"Unexpected OCR result length: {len(text)}")
                 gold, elixir, dark_elixir = [int(fix_digits(s.replace(' ', ''))) for s in text]
                 return {"gold": gold, "elixir": elixir, "dark_elixir": dark_elixir}
             except (KeyboardInterrupt, SystemExit): raise
@@ -100,6 +102,8 @@ class Upgrader:
                 
                 # Extract text
                 text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
+                if not text:
+                    raise Exception("Empty OCR result")
                 available = int(text[0])
                 return available > 0
             except (KeyboardInterrupt, SystemExit): raise
@@ -125,6 +129,8 @@ class Upgrader:
                 
                 # Extract text
                 text = fix_digits(''.join(OCR_Handler.get_text(section)).replace(' ', '').replace('/', ''))
+                if not text:
+                    raise Exception("Empty OCR result")
                 available = int(text[0])
                 return available > 0
             except (KeyboardInterrupt, SystemExit): raise
@@ -200,9 +206,14 @@ class Upgrader:
     def _get_upgrade_name(self):
         import re
         x, y = Frame_Handler.locate(self.assets["upgrade_name"], ref="lc", thresh=0.9)
+        if x is None or y is None:
+            raise Exception("Upgrade name label not found")
         section = Frame_Handler.get_frame_section(x+0.122, y-0.04, 1-x, y+0.035, high_contrast=True, thresh=255, use_cached=True)
         if configs.DEBUG: Frame_Handler.save_frame(section, "debug/upgrade_name.png")
-        upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", OCR_Handler.get_text(section)[0].lower()[:-3]))
+        texts = OCR_Handler.get_text(section)
+        if not texts:
+            raise Exception("OCR returned empty upgrade name")
+        upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", texts[0].lower()[:-3]))
         return upgrade_name
 
     def _get_upgrade_menu(self, frame, sug_loc, sug_width, return_bounds=False):
@@ -221,6 +232,8 @@ class Upgrader:
         import numpy as np
         
         def profile_bounds(profile):
+            if len(profile) == 0:
+                return np.empty((0, 2), dtype=int), np.array([])
             bounds = []
             prev_val = 0
             for i, val in enumerate(profile):
@@ -231,6 +244,10 @@ class Upgrader:
                 prev_val = val
             if prev_val == 1:
                 bounds.append(len(profile))
+            if len(bounds) % 2 != 0:
+                bounds = bounds[:-1]
+            if len(bounds) == 0:
+                return np.empty((0, 2), dtype=int), np.array([])
             bounds = np.array(bounds).reshape((-1, 2))
             centers = (bounds[:, 0] + bounds[:, 1]) / 2
             return bounds, centers
@@ -750,7 +767,10 @@ class Upgrader:
             
             # Get upgrade name
             section = Frame_Handler.high_contrast(Frame_Handler.get_frame_section(menu_left, y_upgrade - 0.035, menu_center, y_upgrade + 0.025))
-            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", OCR_Handler.get_text(section)[0].lower()))
+            texts = OCR_Handler.get_text(section)
+            if not texts:
+                return None
+            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", texts[0].lower()))
             
             # Select upgrade
             Input_Handler.click(x_upgrade, y_upgrade)
@@ -905,7 +925,10 @@ class Upgrader:
             
             # Get upgrade name
             section = Frame_Handler.high_contrast(Frame_Handler.get_frame_section(menu_left, y_upgrade - 0.035, menu_center, y_upgrade + 0.025))
-            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", OCR_Handler.get_text(section)[0].lower()))
+            texts = OCR_Handler.get_text(section)
+            if not texts:
+                return None
+            upgrade_name = spell_check(re.sub(r"\s*x\d+$", "", texts[0].lower()))
             
             # Select upgrade
             Input_Handler.click(x_upgrade, y_upgrade)

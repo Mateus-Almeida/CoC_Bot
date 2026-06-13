@@ -53,6 +53,12 @@ class Attacker:
             find_a_match_xy = (None, None)
             
             for attempt in range(3):
+                # Se o jogo fechou (ex: por tecla voltar no lobby ou crash), reabre antes de tentar clicar
+                if not is_coc_running():
+                    print("⚠️ Clash of Clans foi fechado. Reabrendo o jogo...")
+                    start_coc()
+                    time.sleep(1.0)
+
                 print(f"Tentando abrir o menu de ataque (tentativa {attempt + 1}/3)...")
                 Input_Handler.click(0.07, 0.9)
                 time.sleep(0.5) # Aguarda a animação do menu lateral deslizar
@@ -128,6 +134,11 @@ class Attacker:
             frame = None
 
             while time.time() - search_start < CLOUD_CANCEL_AFTER:
+                # Se o jogo fechou durante a busca, aborta imediatamente
+                if not is_coc_running():
+                    print("⚠️ Clash of Clans foi fechado durante a busca por oponente.")
+                    return False
+
                 now = time.time()
                 elapsed = int(now - search_start)
 
@@ -239,7 +250,11 @@ class Attacker:
             frame_gray = cv2.equalizeHist(frame_gray)
             edges = cv2.convertScaleAbs(np.abs(cv2.Sobel(frame_gray, cv2.CV_64F, 1, 0, ksize=3)))
             profile = np.sum(edges, axis=0)
-            profile = (profile - profile.min()) / (profile.max() - profile.min())
+            profile_range = profile.max() - profile.min()
+            if profile_range <= 0:
+                print("⚠️ [detect_troop_positions] Perfil sem variação suficiente. Retornando vazio.")
+                return _empty_output() if (return_boundaries or return_types or return_counts) else np.array([])
+            profile = (profile - profile.min()) / profile_range
             peaks = scipy.signal.find_peaks(profile, height=0.8, distance=10)[0]
             peaks_norm = peaks / orig_w + clip_left
             
@@ -548,9 +563,10 @@ class Attacker:
             time.sleep(wait_time)
             print("Reiniciando o app para computar o ataque (Auto-Complete)...")
             if restart:
-                start_coc()
+                return bool(start_coc())
             else:
                 stop_coc()
+                return True
         else:
             print("AUTO_COMPLETE_BATTLE desativado. Aguardando o fim da batalha na tela (modo simulação humana)...")
             start_wait = time.time()
@@ -581,9 +597,11 @@ class Attacker:
             if not battle_finished:
                 print("Tempo limite excedido esperando o fim da batalha. Forçando encerramento.")
                 if restart:
-                    start_coc()
+                    return bool(start_coc())
                 else:
                     stop_coc()
+                    return True
+            return battle_finished
     
     def complete_builder_attack(self, restart=True):
         import numpy as np
@@ -603,9 +621,10 @@ class Attacker:
             time.sleep(wait_time)
             print("Reiniciando o app para computar o ataque (Auto-Complete)...")
             if restart:
-                start_coc()
+                return bool(start_coc())
             else:
                 stop_coc()
+                return True
         else:
             print("AUTO_COMPLETE_BATTLE desativado. Aguardando o fim da batalha na tela (modo simulação humana)...")
             start_wait = time.time()
@@ -636,9 +655,11 @@ class Attacker:
             if not battle_finished:
                 print("Tempo limite excedido esperando o fim da batalha. Forçando encerramento.")
                 if restart:
-                    start_coc()
+                    return bool(start_coc())
                 else:
                     stop_coc()
+                    return True
+            return battle_finished
     
     # ============================================================
     # ⚔️ Attack Management
@@ -663,9 +684,12 @@ class Attacker:
             
             # Complete an attack
             if self.start_normal_attack(timeout):
-                self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
-                print("Ataque na Vila Principal concluído com sucesso!")
-                return True
+                completed = self.complete_normal_attack(restart=restart, exclude_clan_troops=EXCLUDE_CLAN_TROOPS)
+                if completed:
+                    print("Ataque na Vila Principal concluído com sucesso!")
+                    return True
+                print("Ataque na Vila Principal iniciou, mas não concluiu corretamente.")
+                return False
             else:
                 print("Ataque na Vila Principal não realizado (Oponente não encontrado ou erro de carregamento).")
                 return False
@@ -693,9 +717,12 @@ class Attacker:
             
             # Complete an attack
             if self.start_builder_attack(timeout):
-                self.complete_builder_attack(restart=restart)
-                print("Ataque na Vila do Construtor concluído com sucesso!")
-                return True
+                completed = self.complete_builder_attack(restart=restart)
+                if completed:
+                    print("Ataque na Vila do Construtor concluído com sucesso!")
+                    return True
+                print("Ataque na Vila do Construtor iniciou, mas não concluiu corretamente.")
+                return False
             else:
                 print("Ataque na Vila do Construtor não realizado (Oponente não encontrado ou erro de carregamento).")
                 return False

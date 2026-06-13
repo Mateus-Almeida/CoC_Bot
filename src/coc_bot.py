@@ -227,7 +227,28 @@ class CoC_Bot:
                         return True
         return False
 
+    def _force_restart_emulator(self):
+        import subprocess, sys
+        try:
+            stop_coc()
+        except Exception:
+            pass
+
+        subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/IM", "HD-Player.exe"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif sys.platform == "darwin":
+            subprocess.run(["osascript", "-e", 'quit application "BlueStacks"'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        print("Aguardando 5 segundos para liberação dos recursos no sistema operacional...")
+        time.sleep(5)
+        self.start_bluestacks()
+
     def connect_adb(self):
+        last_restart_attempt = -1
         for attempt in range(30):
             try:
                 connect_adb()
@@ -235,9 +256,36 @@ class CoC_Bot:
                 return
             except (KeyboardInterrupt, SystemExit): raise
             except Exception as e:
-                if configs.DEBUG: print(f"connect_adb (tentativa {attempt + 1}/30): {e}")
+                err_msg = str(e)
+                if configs.DEBUG: print(f"connect_adb (tentativa {attempt + 1}/30): {err_msg}")
+                
+                is_minitouch_error = "minitouch" in err_msg.lower() or "address already in use" in err_msg.lower()
+                is_connection_error = "refused" in err_msg.lower() or "failed to connect" in err_msg.lower()
+                
+                # Se for erro de minitouch (porta presa mas ADB conectou), reinicia logo
+                if is_minitouch_error:
+                    if last_restart_attempt == -1 or (attempt - last_restart_attempt) >= 10:
+                        print(f"⚠️ Porta do Minitouch presa detectada. Reiniciando o emulador para liberação...")
+                        last_restart_attempt = attempt
+                        try:
+                            self._force_restart_emulator()
+                        except Exception as re_err:
+                            if configs.DEBUG: print(f"Erro ao tentar reiniciar emulador: {re_err}")
+                
+                # Se for erro de conexão (emulador bootando), aguarda 15 tentativas (~45 segundos)
+                # dando tempo para o Android ligar antes de forçar nova reinicialização
+                elif is_connection_error:
+                    if attempt == 14:  # 15ª tentativa
+                        print(f"⚠️ Sem resposta do ADB após 15 tentativas (tempo de boot). Reiniciando o emulador...")
+                        last_restart_attempt = attempt
+                        try:
+                            self._force_restart_emulator()
+                        except Exception as re_err:
+                            if configs.DEBUG: print(f"Erro ao tentar reiniciar emulador: {re_err}")
             time.sleep(2.0)
         raise Exception("Falha ao conectar ao ADB.")
+
+
 
     def restart_bluestacks_flow(self):
         import subprocess, sys
@@ -249,6 +297,8 @@ class CoC_Bot:
             stop_coc()
         except Exception:
             pass
+
+        subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         if sys.platform == "win32":
             subprocess.run(["taskkill", "/F", "/IM", "HD-Player.exe"],
@@ -263,6 +313,7 @@ class CoC_Bot:
         self.start_bluestacks()
         self.connect_adb()
         print("=== BlueStacks reiniciado e ADB reconectado com sucesso ===\n")
+
 
     # ============================================================
     # ⚔️ Attack helpers com registro de sessão
@@ -304,6 +355,7 @@ class CoC_Bot:
 
                     print("--- Iniciando um novo ciclo de verificação ---")
                     cycle_success = True
+                    actual_wait = (60 * CHECK_INTERVAL) * random.uniform(0.85, 1.15)
                     if start_coc():
                         self.update_status("now")
 
@@ -330,9 +382,11 @@ class CoC_Bot:
                             success = self._run_home_attack(restart=should_restart)
                             if success:
                                 self.successful_attacks += 1
+                                play_sound("attack_success")
                             else:
                                 self.failed_attacks += 1
                                 cycle_success = False
+                                play_sound("attack_error")
                             self.total_attacks += 1
 
                         # ── Vila do Construtor ──────────────────────────
@@ -347,9 +401,11 @@ class CoC_Bot:
                             success = self._run_builder_attack()
                             if success:
                                 self.successful_attacks += 1
+                                play_sound("attack_success")
                             else:
                                 self.failed_attacks += 1
                                 cycle_success = False
+                                play_sound("attack_error")
                             self.total_attacks += 1
 
                         stop_coc()
@@ -383,6 +439,13 @@ class CoC_Bot:
                             print(f"✅ Ciclo concluído. Próxima execução em ~{CHECK_INTERVAL} min.")
 
                         self.cycle_count += 1
+                    else:
+                        cycle_success = False
+                        self.quick_retry = True
+                        actual_wait = random.uniform(20, 45)
+                        self.update_status("error")
+                        play_sound("app_error")
+                        print(f"⚠️ Não foi possível iniciar o CoC. Nova tentativa em {int(actual_wait)}s...")
 
                     if RESTART_EMULATOR_CYCLE_INTERVAL > 0 and self.cycle_count >= RESTART_EMULATOR_CYCLE_INTERVAL:
                         self.restart_bluestacks_flow()
@@ -399,7 +462,9 @@ class CoC_Bot:
                     except Exception:
                         pass
                     self.update_status("error")
+                    play_sound("app_error")
                     print(f"❌ Erro inesperado no ciclo principal: {e}. Aguardando antes de retentar...")
+
                     time.sleep(random.uniform(15, 45))
 
                     try:

@@ -93,23 +93,63 @@ def to_system_home():
 
 def connect_adb():
     global ADB_DEVICE, MINITOUCH_DEVICE
-    import subprocess, adbutils, os
+    import subprocess, adbutils, os, time
     from pyminitouch import MNTDevice
     
     if ADB_ABS_DIR != "": os.environ["PATH"] = ADB_ABS_DIR + os.pathsep + os.environ["PATH"]
-    subprocess.run(["adb", "start-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    res = adbutils.adb.connect(ADB_ADDRESS)
-    if "connected" not in res:
-        raise Exception(f"Failed to connect to ADB: {res}")
-    device, mt_device = None, None
-    try:
-        device = adbutils.device(ADB_ADDRESS)
-        mt_device = MNTDevice(ADB_ADDRESS)
-        Exit_Handler.register(mt_device.stop)
-    except (KeyboardInterrupt, SystemExit): raise
-    except Exception as e:
-        raise Exception(f"Failed to get ADB device or initialize Minitouch: {e}")
-    ADB_DEVICE, MINITOUCH_DEVICE = device, mt_device
+
+    def _start_server():
+        subprocess.run(["adb", "start-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def _kill_server():
+        subprocess.run(["adb", "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    last_err = None
+    for attempt in range(2):
+        try:
+            _start_server()
+            res = adbutils.adb.connect(ADB_ADDRESS)
+            if "connected" not in res:
+                raise Exception(f"Failed to connect to ADB: {res}")
+
+            try:
+                subprocess.run(
+                    ["adb", "wait-for-device"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
+            except Exception:
+                pass
+
+            device = adbutils.device(ADB_ADDRESS)
+
+            mt_device = None
+            mt_err = None
+            for mt_attempt in range(5):
+                try:
+                    mt_device = MNTDevice(ADB_ADDRESS)
+                    break
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception as e:
+                    mt_err = e
+                    time.sleep(1.0)
+
+            if mt_device is None:
+                raise Exception(f"Failed to initialize Minitouch after retries: {mt_err!r}")
+
+            Exit_Handler.register(mt_device.stop)
+            ADB_DEVICE, MINITOUCH_DEVICE = device, mt_device
+            return
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as e:
+            last_err = e
+            _kill_server()
+            time.sleep(1.5)
+
+    raise Exception(f"Failed to connect to ADB after retries: {last_err!r}")
 
 def running():
     import requests
@@ -648,9 +688,14 @@ def require_exit(n=5, delay=0.1):
     def decorator(func):
         def wrapper(*args, **kwargs):
             result = None
-            try: result = func(*args, **kwargs)
+            try:
+                result = func(*args, **kwargs)
             except (KeyboardInterrupt, SystemExit): raise
-            except: pass
+            except Exception as e:
+                if configs.DEBUG:
+                    import traceback
+                    print(f"require_exit({func.__name__})", e)
+                    traceback.print_exc()
             try:
                 Input_Handler.click_exit(n, delay)
             except:
@@ -665,8 +710,9 @@ class Exit_Handler:
     @classmethod
     def register(cls, func):
         import atexit
-        atexit.register(func)
-        cls.RUN_AT_EXIT.append(func)
+        if func not in cls.RUN_AT_EXIT:
+            atexit.register(func)
+            cls.RUN_AT_EXIT.append(func)
         return func
 
     @classmethod
@@ -1005,6 +1051,17 @@ def clear_popups():
                     time.sleep(0.3)
         except Exception as e:
             if configs.DEBUG: print("Erro ao limpar pop-ups:", e)
+
+def is_coc_running():
+    if ADB_DEVICE is None:
+        return False
+    try:
+        pid = ADB_DEVICE.shell("pidof com.supercell.clashofclans").strip()
+        return bool(pid)
+    except Exception as e:
+        if configs.DEBUG: print("Erro ao checar se CoC está rodando:", e)
+        return False
+
 
 
 class Input_Handler:
@@ -1354,3 +1411,26 @@ class Dev_Tools:
         if return_results:
             return optimal_size, results
         return optimal_size
+
+def play_sound(event_type):
+    import sys
+    if sys.platform == "win32":
+        try:
+            import winsound
+            import time
+            if event_type == "attack_success":
+                winsound.Beep(1000, 150)
+                time.sleep(0.05)
+                winsound.Beep(1500, 250)
+            elif event_type == "attack_error":
+                winsound.Beep(600, 200)
+                time.sleep(0.05)
+                winsound.Beep(400, 300)
+            elif event_type == "app_error":
+                for _ in range(3):
+                    winsound.Beep(2000, 100)
+                    time.sleep(0.05)
+        except Exception:
+            print('\a', end='', flush=True)
+    else:
+        print('\a', end='', flush=True)

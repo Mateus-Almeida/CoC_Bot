@@ -54,6 +54,13 @@ O bot funciona emulando ações de toque em uma instância de emulador **BlueSta
    - Aplicação web Flask (`app/app.py`) que gerencia estados em tempo real e permite pausar/retomar a execução do bot, com suporte opcional a sincronização no PythonAnywhere.
    - Interface desktop (`gui.py`) que roda uma GUI local integrada caso configurado.
 
+### 💻 Compatibilidade & Codificação no Windows (UTF-8)
+O ambiente padrão de execução do usuário é **Windows (sem venv)** executando Python globalmente. Por conta disso, duas regras críticas de compatibilidade foram estabelecidas no ponto de entrada do bot:
+1. **Monkey Patch de `locale`**: No Windows, as saídas do ADB vêm codificadas em UTF-8. O Python padrão no Windows tenta decodificar subprocessos usando `cp1252`, gerando `UnicodeDecodeError`. No início de `main.py`, forçamos `locale.getpreferredencoding` e `locale.getencoding` a retornarem `utf-8`.
+2. **Reconfiguração de stdout/stderr**: Para evitar `UnicodeEncodeError` ao printar símbolos como a seta (`→`) no console CP1252/cp850 do Windows CMD/PowerShell, reconfiguramos o console para UTF-8 usando `sys.stdout.reconfigure(encoding='utf-8', errors='replace')`.
+3. **Dependência do `uiautomator2`**: A pasta interna `src/uiautomator2` foi removida no upstream e substituída por uma biblioteca instalada globalmente via pip (`pip install uiautomator2`). Não recrie esta pasta localmente.
+
+
 ---
 
 ## 🔄 Fluxos de Execução Principais
