@@ -134,3 +134,9 @@ DEBUG = False
 DISABLE_DEVICE_SLEEP = True
 WINDOW_DIMS = (1920, 1080) # width, height
 ADB_ABS_DIR = "" # absolute path to dir with adb executable, leave empty to use system PATH
+
+# == URL Normalization == #
+if WEB_APP_URL != "":
+    if not WEB_APP_URL.startswith(("http://", "https://")):
+        WEB_APP_URL = "http://" + WEB_APP_URL
+    WEB_APP_URL = WEB_APP_URL.rstrip("/")

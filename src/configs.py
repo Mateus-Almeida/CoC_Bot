@@ -150,3 +150,9 @@ MATCHMAKING_SCREENSHOT_INTERVAL = 0.8  # segundos entre capturas ADB na busca na
 # == Logging Configs == #
 LOG_DIR = "logs"            # pasta relativa ao src/ onde salvar os logs de sessão
 MAX_LOG_FILES = 10          # máximo de arquivos de log retidos (os mais antigos são removidos)
+
+# == URL Normalization == #
+if WEB_APP_URL != "":
+    if not WEB_APP_URL.startswith(("http://", "https://")):
+        WEB_APP_URL = "http://" + WEB_APP_URL
+    WEB_APP_URL = WEB_APP_URL.rstrip("/")

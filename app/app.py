@@ -8,6 +8,7 @@ from flask_cors import CORS
 
 PATH = Path(__file__).parent
 CACHE_PATH = PATH / "data" / "cache.json"
+CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
 NOTIFICATION_CACHE_SIZE = 3
 
 app = Flask(__name__)
@@ -49,9 +50,14 @@ class Instance:
     def add_notification(self, data):
         self.notifications.append({"time_stamp": time.time(), "data": str(data)})
         data = get_cache()
+        if "known_instances" not in data:
+            data["known_instances"] = {}
         data["known_instances"][self.id] = self.to_dict()
-        with open(CACHE_PATH, "w") as f:
-            json.dump(data, f, indent=4)
+        try:
+            with open(CACHE_PATH, "w") as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            print("Failed to save notification to cache:", e)
 
 instances = {}
 
@@ -88,8 +94,19 @@ def get_known_instances():
 def update_known_instances():
     global instances
     data = {id: instances[id].to_dict() for id in instances}
-    with open(CACHE_PATH, "w") as f:
-        json.dump({"known_instances": data}, f, indent=4)
+    try:
+        with open(CACHE_PATH, "w") as f:
+            json.dump({"known_instances": data}, f, indent=4)
+    except Exception as e:
+        print("Error updating known instances cache:", e)
+
+def get_or_create_instance(id):
+    global instances
+    id = str(id).strip()
+    if id not in instances:
+        instances[id] = Instance(id)
+        update_known_instances()
+    return instances[id]
 
 @app.route("/", methods=["GET"])
 def home():
@@ -97,8 +114,7 @@ def home():
 
 @app.route("/<id>", methods=["GET"])
 def handle_instance(id):
-    instance = instances.get(id)
-    if not instance: abort(404)
+    instance = get_or_create_instance(id)
     return render_template(
         "instance.html",
         id=id,
@@ -116,8 +132,7 @@ def handle_current_time():
 @app.route("/<id>/end_time", methods=["GET", "POST"])
 def handle_end_time(id):
     global instances
-    instance = instances.get(id)
-    if not instance: abort(404)
+    instance = get_or_create_instance(id)
     if request.method == "POST":
         data = request.json.get("time", 0)
         instance.end_time = int(data) * 60 + time.time()
@@ -127,15 +142,13 @@ def handle_end_time(id):
 
 @app.route("/<id>/running", methods=["GET"])
 def handle_running(id):
-    instance = instances.get(id)
-    if not instance: abort(404)
+    instance = get_or_create_instance(id)
     return {"running": instance.end_time == 0 or instance.end_time < time.time()}
 
 @app.route("/<id>/status", methods=["GET", "POST"])
 def handle_status(id):
     global instances
-    instance = instances.get(id)
-    if not instance: abort(404)
+    instance = get_or_create_instance(id)
     if request.method == "POST":
         data = request.json
         instance.run_status = data.get("status", "")
@@ -146,8 +159,7 @@ def handle_status(id):
 @app.route("/<id>/exclude", methods=["GET", "POST"])
 def handle_exclude(id):
     global instances
-    instance = instances.get(id)
-    if not instance: abort(404)
+    instance = get_or_create_instance(id)
     if request.method == "POST":
         data = request.json
         action = data.get("action", "")
@@ -156,22 +168,21 @@ def handle_exclude(id):
             instance.exclusions.add(item)
         elif action == "remove":
             instance.exclusions.discard(item)
+        update_known_instances()
     return {"exclusions": sorted(list(instance.exclusions))}
 
 @app.route("/<id>/notify", methods=["POST"])
 def handle_notify(id):
     global instances
     data = request.json
-    instance = instances.get(id)
-    if not instance: abort(404)
+    instance = get_or_create_instance(id)
     instance.add_notification(data)
     return jsonify({"status": "success", "received": data})
 
 @app.route("/<id>/notifications", methods=["POST"])
 def handle_notifications(id):
     n = request.json
-    instance = instances.get(id)
-    if not instance: abort(404)
+    instance = get_or_create_instance(id)
     return jsonify(instance.get_notifications(n))
 
 @app.route("/instances", methods=["GET", "POST"])
@@ -182,9 +193,7 @@ def handle_instances():
         id = str(data.get("id", "")).strip()
         if id == "":
             return jsonify({"status": "error", "message": "Invalid ID"}), 400
-        if id not in instances:
-            instances[id] = Instance(id)
-            update_known_instances()
+        get_or_create_instance(id)
         return jsonify({"status": "success", "id": id})
 
     return jsonify({"ids": sorted(instances.keys())})
